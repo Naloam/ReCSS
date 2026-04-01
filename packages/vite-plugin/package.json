@@ -1,7 +1,12 @@
 {
   "name": "@recss/vite-plugin",
   "version": "0.1.0",
+  "description": "Vite dev plugin for ReCSS CSS health warnings.",
+  "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,7 +23,16 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "lint": "eslint \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@recss/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0 || ^6.0.0"
+  },
+  "devDependencies": {
+    "vite": "^6.3.4"
   }
 }
