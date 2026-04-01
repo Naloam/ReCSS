@@ -1,23 +1,41 @@
-import { readdir, readFile } from "node:fs/promises";
-import { extname, relative, resolve } from "node:path";
+import { copyFile, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname, extname, relative, resolve } from "node:path";
 
+import { buildMigrationSuggestions, type MigrationSuggestion } from "@recss/core";
 import { defineCommand } from "citty";
 
-export type MigrationSuggestion = {
-  file: string;
-  suggestedModuleFile: string;
-  classNames: string[];
+const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".vscode"]);
+
+type MigrationApplyResult = {
+  copiedFiles: number;
+  updatedSourceFiles: number;
 };
 
-const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".vscode"]);
-const STYLE_EXTENSIONS = new Set([".css", ".scss"]);
-
-function isModuleStyleFile(path: string): boolean {
-  return path.endsWith(".module.css") || path.endsWith(".module.scss");
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-async function collectStyleFiles(directory: string): Promise<string[]> {
-  const queue: string[] = [directory];
+function toImportPath(path: string): string {
+  const normalized = path.replaceAll("\\", "/");
+  if (normalized.startsWith(".")) {
+    return normalized;
+  }
+
+  return `./${normalized}`;
+}
+
+function replaceQuotedPath(content: string, fromPath: string, toPath: string): string {
+  const escaped = escapeRegExp(fromPath);
+  const singleQuoted = new RegExp(`'${escaped}'`, "g");
+  const doubleQuoted = new RegExp(`\"${escaped}\"`, "g");
+
+  return content
+    .replace(singleQuoted, `'${toPath}'`)
+    .replace(doubleQuoted, `"${toPath}"`);
+}
+
+async function collectSourceFiles(root: string): Promise<string[]> {
+  const queue: string[] = [root];
   const files: string[] = [];
 
   while (queue.length > 0) {
@@ -41,49 +59,54 @@ async function collectStyleFiles(directory: string): Promise<string[]> {
       }
 
       const extension = extname(entry.name);
-      if (!STYLE_EXTENSIONS.has(extension) || isModuleStyleFile(entry.name)) {
-        continue;
+      if ([".vue", ".tsx", ".jsx", ".ts", ".js", ".html"].includes(extension)) {
+        files.push(fullPath);
       }
-
-      files.push(fullPath);
     }
   }
 
   return files;
 }
 
-function extractClassNames(css: string): string[] {
-  const matches = css.matchAll(/\.(?<name>[A-Za-z_][A-Za-z0-9_-]*)/g);
-  const classSet = new Set<string>();
+export async function applyMigrationSuggestions(
+  root: string,
+  suggestions: MigrationSuggestion[],
+): Promise<MigrationApplyResult> {
+  let copiedFiles = 0;
+  let updatedSourceFiles = 0;
 
-  for (const match of matches) {
-    const className = match.groups?.name;
-    if (className) {
-      classSet.add(className);
+  for (const suggestion of suggestions) {
+    try {
+      await stat(suggestion.suggestedModuleFile);
+    } catch {
+      await copyFile(suggestion.file, suggestion.suggestedModuleFile);
+      copiedFiles += 1;
     }
   }
 
-  return [...classSet].sort();
-}
+  const sourceFiles = await collectSourceFiles(root);
 
-export async function buildMigrationSuggestions(
-  directory: string,
-): Promise<MigrationSuggestion[]> {
-  const files = await collectStyleFiles(directory);
-  const suggestions: MigrationSuggestion[] = [];
+  for (const sourceFile of sourceFiles) {
+    let content = await readFile(sourceFile, "utf8");
+    const before = content;
 
-  for (const file of files) {
-    const css = await readFile(file, "utf8");
-    const classNames = extractClassNames(css);
+    for (const suggestion of suggestions) {
+      const sourceDir = dirname(sourceFile);
+      const oldImportPath = toImportPath(relative(sourceDir, suggestion.file));
+      const newImportPath = toImportPath(relative(sourceDir, suggestion.suggestedModuleFile));
+      content = replaceQuotedPath(content, oldImportPath, newImportPath);
+    }
 
-    suggestions.push({
-      file,
-      suggestedModuleFile: file.replace(/\.(css|scss)$/u, ".module.$1"),
-      classNames,
-    });
+    if (content !== before) {
+      await writeFile(sourceFile, content, "utf8");
+      updatedSourceFiles += 1;
+    }
   }
 
-  return suggestions;
+  return {
+    copiedFiles,
+    updatedSourceFiles,
+  };
 }
 
 function renderSuggestions(root: string, suggestions: MigrationSuggestion[]): string {
@@ -115,7 +138,7 @@ function renderSuggestions(root: string, suggestions: MigrationSuggestion[]): st
 export const migrateCommand = defineCommand({
   meta: {
     name: "migrate",
-    description: "Generate CSS Modules migration suggestions (no file writes).",
+    description: "Generate or apply CSS Modules migration suggestions.",
   },
   args: {
     dir: {
@@ -124,11 +147,24 @@ export const migrateCommand = defineCommand({
       required: false,
       description: "Component directory to inspect.",
     },
+    apply: {
+      type: "boolean",
+      required: false,
+      description: "Apply migration by creating .module files and updating imports.",
+    },
   },
   async run({ args }): Promise<void> {
     const directory = typeof args.dir === "string" ? args.dir : ".";
     const root = resolve(directory);
     const suggestions = await buildMigrationSuggestions(root);
+
+    if (args.apply === true) {
+      const result = await applyMigrationSuggestions(root, suggestions);
+      process.stdout.write(
+        `[recss] applied migration: copied ${result.copiedFiles} style files, updated ${result.updatedSourceFiles} source files.\n`,
+      );
+      return;
+    }
 
     process.stdout.write(`${renderSuggestions(root, suggestions)}\n`);
   },

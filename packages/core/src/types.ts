@@ -122,3 +122,9 @@ export type AnalyzeOptions = {
   sourceInclude?: string[];
   sourceExclude?: string[];
 };
+
+export type MigrationSuggestion = {
+  file: string;
+  suggestedModuleFile: string;
+  classNames: string[];
+};
