@@ -1,10 +1,12 @@
 import {
   analyzeSpecificity,
+  loadConfig,
   parseAll,
   scanFiles,
   type RecssFramework,
 } from "@recss/core";
 import { defineCommand } from "citty";
+import { resolve } from "node:path";
 
 const supportedFrameworks = ["auto", "vue", "react", "html"] as const;
 
@@ -44,7 +46,6 @@ export const checkCommand = defineCommand({
     },
     framework: {
       type: "string",
-      default: "auto",
       description: "Target framework: auto, vue, react, or html.",
     },
     threshold: {
@@ -52,25 +53,44 @@ export const checkCommand = defineCommand({
       default: "0",
       description: "Fail only when conflicts exceed this threshold.",
     },
+    config: {
+      type: "string",
+      required: false,
+      description: "Path to config file.",
+    },
   },
   async run({ args }): Promise<void> {
     const directory = typeof args.dir === "string" ? args.dir : ".";
+    const configPath = typeof args.config === "string" ? args.config : undefined;
+    const config = await loadConfig(directory, configPath);
     const framework =
       typeof args.framework === "string" && isCheckFramework(args.framework)
         ? args.framework
-        : "auto";
+        : config.framework;
     const thresholdValue =
       typeof args.threshold === "string" ? Number(args.threshold) : 0;
     const threshold = Number.isFinite(thresholdValue)
       ? Math.max(0, thresholdValue)
       : 0;
 
+    const analysisRoot = resolve(directory, config.root);
+
     const scanResult = await scanFiles({
-      root: directory,
-      cssInclude: ["**/*.{css,scss}"],
-      cssExclude: ["**/*.module.{css,scss}"],
-      sourceInclude: getSourceIncludeByFramework(framework),
-      sourceExclude: ["**/*.test.*", "**/*.spec.*"],
+      root: analysisRoot,
+      cssInclude:
+        config.css.include.length > 0 ? config.css.include : ["**/*.{css,scss}"],
+      cssExclude:
+        config.css.exclude.length > 0
+          ? config.css.exclude
+          : ["**/*.module.{css,scss}"],
+      sourceInclude:
+        config.sources.include.length > 0
+          ? config.sources.include
+          : getSourceIncludeByFramework(framework),
+      sourceExclude:
+        config.sources.exclude.length > 0
+          ? config.sources.exclude
+          : ["**/*.test.*", "**/*.spec.*"],
     });
 
     const parsed = await parseAll(scanResult);

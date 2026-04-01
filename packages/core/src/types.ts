@@ -117,4 +117,8 @@ export type AnalyzeOptions = {
   root: string;
   framework?: RecssFramework;
   safelist?: SafelistPattern[];
+  cssInclude?: string[]
+  cssExclude?: string[]
+  sourceInclude?: string[]
+  sourceExclude?: string[]
 };

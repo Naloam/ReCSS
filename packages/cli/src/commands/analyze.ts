@@ -1,11 +1,13 @@
 import { defineCommand } from "citty";
 import {
   analyzeProject,
+  loadConfig,
   renderConsoleReport,
   renderJsonReport,
   type AnalysisResult,
   type RecssFramework,
 } from "@recss/core";
+import { resolve } from "node:path";
 
 const supportedFrameworks = ["auto", "vue", "react", "html"] as const;
 const supportedOutputs = ["console", "json"] as const;
@@ -35,13 +37,16 @@ export const analyzeCommand = defineCommand({
     },
     framework: {
       type: "string",
-      default: "auto",
       description: "Target framework: auto, vue, react, or html.",
     },
     output: {
       type: "string",
-      default: "console",
       description: "Output format: console or json.",
+    },
+    config: {
+      type: "string",
+      required: false,
+      description: "Path to config file.",
     },
     safelist: {
       type: "string",
@@ -51,30 +56,39 @@ export const analyzeCommand = defineCommand({
   },
   async run({ args }): Promise<void> {
     const directory = typeof args.dir === "string" ? args.dir : ".";
+    const configPath = typeof args.config === "string" ? args.config : undefined;
+    const config = await loadConfig(directory, configPath);
+
     const framework =
       typeof args.framework === "string" && isAnalyzeFramework(args.framework)
         ? args.framework
-        : "auto";
+        : config.framework;
     const output =
       typeof args.output === "string" && isAnalyzeOutput(args.output)
         ? args.output
-        : "console";
+        : config.report.format;
 
-    const safelist =
+    const cliSafelist =
       typeof args.safelist === "string"
         ? args.safelist
             .split(",")
             .map((item) => item.trim())
             .filter((item) => item.length > 0)
-        : [];
+        : undefined;
+
+    const analysisRoot = resolve(directory, config.root);
 
     const result = await analyzeProject({
-      root: directory,
+      root: analysisRoot,
       framework: framework as RecssFramework,
-      safelist,
+      safelist: cliSafelist ?? config.safelist,
+      cssInclude: config.css.include,
+      cssExclude: config.css.exclude,
+      sourceInclude: config.sources.include,
+      sourceExclude: config.sources.exclude,
     });
 
-    writeReport(output, directory, result);
+    writeReport(output, analysisRoot, result);
 
     if (result.unused.stats.unusedClasses > 0) {
       process.exitCode = 1;
