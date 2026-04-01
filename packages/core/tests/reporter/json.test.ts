@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from "vitest";
 
-import { renderJsonReport } from '../../src/reporter/json.js'
+import { renderJsonReport } from "../../src/reporter/json.js";
 
-describe('renderJsonReport', () => {
-  it('should stringify analysis result as pretty json', () => {
+describe("renderJsonReport", () => {
+  it("should stringify analysis result as pretty json", () => {
     const output = renderJsonReport({
       unused: {
         unused: [],
@@ -16,9 +16,9 @@ describe('renderJsonReport', () => {
           safelistedClasses: 0,
         },
       },
-    })
+    });
 
-    expect(() => JSON.parse(output)).not.toThrow()
-    expect(output).toContain('"unusedClasses": 1')
-  })
-})
+    expect(() => JSON.parse(output)).not.toThrow();
+    expect(output).toContain('"unusedClasses": 1');
+  });
+});

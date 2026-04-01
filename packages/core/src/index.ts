@@ -1,7 +1,7 @@
 export { defineConfig } from "./config.js";
-export { loadConfig } from './config/loader.js'
-export { ConfigSchema, normalizeConfig } from './config/schema.js'
-export type { RecssCoreConfig } from './config/schema.js'
+export { loadConfig } from "./config/loader.js";
+export { ConfigSchema, normalizeConfig } from "./config/schema.js";
+export type { RecssCoreConfig } from "./config/schema.js";
 export {
   analyzeProject,
   analyzeSpecificity,

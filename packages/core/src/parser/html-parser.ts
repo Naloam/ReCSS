@@ -1,54 +1,56 @@
-import { readFile } from 'node:fs/promises'
+import { readFile } from "node:fs/promises";
 
-import { parse } from 'node-html-parser'
+import { parse } from "node-html-parser";
 
-import type { SourceScanResult } from '../types.js'
+import type { SourceScanResult } from "../types.js";
 
 function createEmptyResult(): SourceScanResult {
   return {
     used: new Set<string>(),
     uncertain: new Set<string>(),
-  }
+  };
 }
 
 function addClasses(target: Set<string>, classValue: string): void {
   for (const className of classValue.split(/\s+/)) {
-    const normalized = className.trim()
+    const normalized = className.trim();
     if (normalized.length > 0) {
-      target.add(normalized)
+      target.add(normalized);
     }
   }
 }
 
 export function parseHtmlCode(sourceCode: string): SourceScanResult {
-  const result = createEmptyResult()
+  const result = createEmptyResult();
 
   try {
-    const root = parse(sourceCode)
-    const nodes = root.querySelectorAll('[class]')
+    const root = parse(sourceCode);
+    const nodes = root.querySelectorAll("[class]");
 
     for (const node of nodes) {
-      const value = node.getAttribute('class')
-      if (typeof value === 'string') {
-        addClasses(result.used, value)
+      const value = node.getAttribute("class");
+      if (typeof value === "string") {
+        addClasses(result.used, value);
       }
     }
 
-    return result
+    return result;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.warn(`[recss] failed to parse HTML source: ${message}`)
-    return createEmptyResult()
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[recss] failed to parse HTML source: ${message}`);
+    return createEmptyResult();
   }
 }
 
-export async function parseHtmlFile(filePath: string): Promise<SourceScanResult> {
+export async function parseHtmlFile(
+  filePath: string,
+): Promise<SourceScanResult> {
   try {
-    const sourceCode = await readFile(filePath, 'utf8')
-    return parseHtmlCode(sourceCode)
+    const sourceCode = await readFile(filePath, "utf8");
+    return parseHtmlCode(sourceCode);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.warn(`[recss] failed to read HTML file ${filePath}: ${message}`)
-    return createEmptyResult()
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[recss] failed to read HTML file ${filePath}: ${message}`);
+    return createEmptyResult();
   }
 }
