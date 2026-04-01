@@ -62,6 +62,11 @@ pnpm version-packages
 pnpm release
 ```
 
+GitHub Actions:
+
+- CI workflow: `.github/workflows/ci.yml`
+- Release workflow: `.github/workflows/release.yml` (requires `NPM_TOKEN` secret)
+
 ## Name Note
 
 Current name remains ReCSS, which is short and intention-revealing.
