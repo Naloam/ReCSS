@@ -1,4 +1,5 @@
 export { defineConfig } from "./config.js";
+export { analyzeUnused } from './analyzer/index.js'
 export {
   parseCssCode,
   parseCssFile,
@@ -22,4 +23,6 @@ export type {
   ScanResult,
   SafelistPattern,
   SourceScanResult,
+  UnusedAnalysisResult,
+  UnusedClass,
 } from "./types.js";
