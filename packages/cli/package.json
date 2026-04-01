@@ -1,0 +1,34 @@
+{
+  "name": "recss",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "bin": {
+    "recss": "./dist/bin.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@recss/core": "workspace:*",
+    "citty": "^0.1.6"
+  }
+}
