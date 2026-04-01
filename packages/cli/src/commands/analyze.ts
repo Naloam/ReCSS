@@ -1,4 +1,11 @@
 import { defineCommand } from 'citty'
+import {
+  analyzeProject,
+  renderConsoleReport,
+  renderJsonReport,
+  type AnalysisResult,
+  type RecssFramework,
+} from '@recss/core'
 
 const supportedFrameworks = ['auto', 'vue', 'react', 'html'] as const
 const supportedOutputs = ['console', 'json'] as const
@@ -36,6 +43,11 @@ export const analyzeCommand = defineCommand({
       default: 'console',
       description: 'Output format: console or json.',
     },
+    safelist: {
+      type: 'string',
+      required: false,
+      description: 'Comma-separated class names to skip as unused.',
+    },
   },
   async run({ args }): Promise<void> {
     const directory = typeof args.dir === 'string' ? args.dir : '.'
@@ -48,29 +60,33 @@ export const analyzeCommand = defineCommand({
         ? args.output
         : 'console'
 
-    const payload = {
-      command: 'analyze',
-      framework,
-      output,
-      status: 'ready',
-      targetDir: directory,
-      message:
-        'ReCSS scaffold is wired for Phase 1. Next implementation step is the core analyzer pipeline.',
-    }
+    const safelist =
+      typeof args.safelist === 'string'
+        ? args.safelist
+            .split(',')
+            .map((item) => item.trim())
+            .filter((item) => item.length > 0)
+        : []
 
-    if (output === 'json') {
-      process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
-      return
-    }
+    const result = await analyzeProject({
+      root: directory,
+      framework: framework as RecssFramework,
+      safelist,
+    })
 
-    process.stdout.write(
-      [
-        'ReCSS scaffold is ready.',
-        `Target: ${payload.targetDir}`,
-        `Framework: ${payload.framework}`,
-        `Output: ${payload.output}`,
-        payload.message,
-      ].join('\n') + '\n',
-    )
+    writeReport(output, directory, result)
+
+    if (result.unused.stats.unusedClasses > 0) {
+      process.exitCode = 1
+    }
   },
 })
+
+function writeReport(output: AnalyzeOutput, root: string, result: AnalysisResult): void {
+  if (output === 'json') {
+    process.stdout.write(`${renderJsonReport(result)}\n`)
+    return
+  }
+
+  process.stdout.write(`${renderConsoleReport(root, result)}\n`)
+}

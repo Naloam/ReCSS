@@ -1,5 +1,5 @@
 export { defineConfig } from "./config.js";
-export { analyzeUnused } from './analyzer/index.js'
+export { analyzeProject, analyzeUnused } from './analyzer/index.js'
 export { renderConsoleReport, renderJsonReport } from './reporter/index.js'
 export {
   parseCssCode,
@@ -13,6 +13,7 @@ export { parseVueCode, parseVueFile } from './parser/vue-parser.js'
 export { scanFiles } from './scanner/index.js'
 export type {
   AnalysisResult,
+  AnalyzeOptions,
   ClassDefinition,
   CssParseResult,
   ParseAllResult,
