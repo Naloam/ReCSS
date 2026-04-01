@@ -1,54 +1,60 @@
-import { resolve } from 'node:path'
+import { resolve } from "node:path";
 
-import { parseAll } from '../parser/index.js'
-import { scanFiles } from '../scanner/index.js'
+import { parseAll } from "../parser/index.js";
+import { scanFiles } from "../scanner/index.js";
 
-import { analyzeUnused } from './unused.js'
+import { analyzeUnused } from "./unused.js";
 
-import type { AnalysisResult, AnalyzeOptions, RecssFramework } from '../types.js'
+import type {
+  AnalysisResult,
+  AnalyzeOptions,
+  RecssFramework,
+} from "../types.js";
 
-export { analyzeUnused } from './unused.js'
-export { analyzeSpecificity } from './specificity.js'
+export { analyzeUnused } from "./unused.js";
+export { analyzeSpecificity } from "./specificity.js";
 
 function getSourceIncludeByFramework(framework: RecssFramework): string[] {
-	if (framework === 'vue') {
-		return ['**/*.vue']
-	}
+  if (framework === "vue") {
+    return ["**/*.vue"];
+  }
 
-	if (framework === 'react') {
-		return ['**/*.{tsx,jsx}']
-	}
+  if (framework === "react") {
+    return ["**/*.{tsx,jsx}"];
+  }
 
-	if (framework === 'html') {
-		return ['**/*.html']
-	}
+  if (framework === "html") {
+    return ["**/*.html"];
+  }
 
-	return ['**/*.{vue,tsx,jsx,html}']
+  return ["**/*.{vue,tsx,jsx,html}"];
 }
 
-export async function analyzeProject(options: AnalyzeOptions): Promise<AnalysisResult> {
-	const root = resolve(options.root)
-	const framework = options.framework ?? 'auto'
-	const safelist = options.safelist ?? []
+export async function analyzeProject(
+  options: AnalyzeOptions,
+): Promise<AnalysisResult> {
+  const root = resolve(options.root);
+  const framework = options.framework ?? "auto";
+  const safelist = options.safelist ?? [];
 
-	const scanResult = await scanFiles({
-		root,
-		cssInclude: ['**/*.{css,scss}'],
-		cssExclude: ['**/*.module.{css,scss}'],
-		sourceInclude: getSourceIncludeByFramework(framework),
-		sourceExclude: ['**/*.test.*', '**/*.spec.*'],
-	})
+  const scanResult = await scanFiles({
+    root,
+    cssInclude: ["**/*.{css,scss}"],
+    cssExclude: ["**/*.module.{css,scss}"],
+    sourceInclude: getSourceIncludeByFramework(framework),
+    sourceExclude: ["**/*.test.*", "**/*.spec.*"],
+  });
 
-	const parsed = await parseAll(scanResult)
+  const parsed = await parseAll(scanResult);
 
-	const unused = analyzeUnused(
-		parsed.cssResult,
-		parsed.usedClasses,
-		parsed.uncertainClasses,
-		safelist,
-	)
+  const unused = analyzeUnused(
+    parsed.cssResult,
+    parsed.usedClasses,
+    parsed.uncertainClasses,
+    safelist,
+  );
 
-	return {
-		unused,
-	}
+  return {
+    unused,
+  };
 }

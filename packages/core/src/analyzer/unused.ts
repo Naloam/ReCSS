@@ -3,20 +3,20 @@ import type {
   SafelistPattern,
   UnusedAnalysisResult,
   UnusedClass,
-} from '../types.js'
+} from "../types.js";
 
 function isSafelisted(className: string, safelist: SafelistPattern[]): boolean {
   for (const rule of safelist) {
-    if (typeof rule === 'string' && className === rule) {
-      return true
+    if (typeof rule === "string" && className === rule) {
+      return true;
     }
 
     if (rule instanceof RegExp && rule.test(className)) {
-      return true
+      return true;
     }
   }
 
-  return false
+  return false;
 }
 
 export function analyzeUnused(
@@ -25,31 +25,31 @@ export function analyzeUnused(
   uncertainClasses: Set<string>,
   safelist: SafelistPattern[],
 ): UnusedAnalysisResult {
-  const unused: UnusedClass[] = []
-  const skipped: string[] = []
+  const unused: UnusedClass[] = [];
+  const skipped: string[] = [];
 
-  let safelistedClasses = 0
+  let safelistedClasses = 0;
 
   for (const [className, definitions] of cssResult.entries()) {
     if (usedClasses.has(className)) {
-      continue
+      continue;
     }
 
     if (uncertainClasses.has(className)) {
-      skipped.push(className)
-      continue
+      skipped.push(className);
+      continue;
     }
 
     if (isSafelisted(className, safelist)) {
-      safelistedClasses += 1
-      skipped.push(className)
-      continue
+      safelistedClasses += 1;
+      skipped.push(className);
+      continue;
     }
 
     unused.push({
       name: className,
       definitions,
-    })
+    });
   }
 
   return {
@@ -62,5 +62,5 @@ export function analyzeUnused(
       uncertainClasses: uncertainClasses.size,
       safelistedClasses,
     },
-  }
+  };
 }

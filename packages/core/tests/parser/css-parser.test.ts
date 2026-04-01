@@ -16,16 +16,16 @@ describe("parseCssCode", () => {
     expect(definitions?.[0].properties).toEqual(["color", "background"]);
     expect(definitions?.[0].declarations).toEqual([
       {
-        property: 'color',
-        value: 'red',
+        property: "color",
+        value: "red",
         important: false,
       },
       {
-        property: 'background',
-        value: 'white',
+        property: "background",
+        value: "white",
         important: false,
       },
-    ])
+    ]);
   });
 
   it("should resolve nested scss selectors", async () => {
