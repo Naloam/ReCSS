@@ -78,3 +78,7 @@ export type UnusedAnalysisResult = {
     safelistedClasses: number
   }
 }
+
+export type AnalysisResult = {
+  unused: UnusedAnalysisResult
+}
