@@ -1,0 +1,46 @@
+{
+  "name": "@recss/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "keywords": [
+    "css",
+    "scss",
+    "unused",
+    "linter",
+    "refactor",
+    "css-modules"
+  ],
+  "dependencies": {
+    "@babel/parser": "^7.28.0",
+    "@babel/traverse": "^7.28.0",
+    "@types/babel__traverse": "^7.28.0",
+    "@vue/compiler-sfc": "^3.5.18",
+    "css-tree": "^3.1.0",
+    "fast-glob": "^3.3.3",
+    "node-html-parser": "^7.0.1",
+    "postcss": "^8.5.6",
+    "postcss-scss": "^4.0.9",
+    "specificity": "^1.0.0",
+    "zod": "^4.0.17"
+  }
+}
