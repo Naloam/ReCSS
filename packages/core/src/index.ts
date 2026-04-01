@@ -7,7 +7,11 @@ export {
   analyzeSpecificity,
   analyzeUnused,
 } from "./analyzer/index.js";
-export { renderConsoleReport, renderJsonReport } from "./reporter/index.js";
+export {
+  renderConsoleReport,
+  renderHtmlReport,
+  renderJsonReport,
+} from "./reporter/index.js";
 export {
   parseCssCode,
   parseCssFile,

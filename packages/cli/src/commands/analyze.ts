@@ -3,14 +3,16 @@ import {
   analyzeProject,
   loadConfig,
   renderConsoleReport,
+  renderHtmlReport,
   renderJsonReport,
   type AnalysisResult,
   type RecssFramework,
 } from "@recss/core";
-import { resolve } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 const supportedFrameworks = ["auto", "vue", "react", "html"] as const;
-const supportedOutputs = ["console", "json"] as const;
+const supportedOutputs = ["console", "json", "html"] as const;
 
 type AnalyzeFramework = (typeof supportedFrameworks)[number];
 type AnalyzeOutput = (typeof supportedOutputs)[number];
@@ -41,7 +43,7 @@ export const analyzeCommand = defineCommand({
     },
     output: {
       type: "string",
-      description: "Output format: console or json.",
+      description: "Output format: console, json, or html.",
     },
     config: {
       type: "string",
@@ -53,10 +55,16 @@ export const analyzeCommand = defineCommand({
       required: false,
       description: "Comma-separated class names to skip as unused.",
     },
+    outfile: {
+      type: "string",
+      required: false,
+      description: "Write report to file path.",
+    },
   },
   async run({ args }): Promise<void> {
     const directory = typeof args.dir === "string" ? args.dir : ".";
-    const configPath = typeof args.config === "string" ? args.config : undefined;
+    const configPath =
+      typeof args.config === "string" ? args.config : undefined;
     const config = await loadConfig(directory, configPath);
 
     const framework =
@@ -67,6 +75,10 @@ export const analyzeCommand = defineCommand({
       typeof args.output === "string" && isAnalyzeOutput(args.output)
         ? args.output
         : config.report.format;
+    const outfile =
+      typeof args.outfile === "string" && args.outfile.trim().length > 0
+        ? args.outfile
+        : config.report.outfile;
 
     const cliSafelist =
       typeof args.safelist === "string"
@@ -88,7 +100,7 @@ export const analyzeCommand = defineCommand({
       sourceExclude: config.sources.exclude,
     });
 
-    writeReport(output, analysisRoot, result);
+    await writeReport(output, analysisRoot, directory, outfile, result);
 
     if (result.unused.stats.unusedClasses > 0) {
       process.exitCode = 1;
@@ -96,15 +108,46 @@ export const analyzeCommand = defineCommand({
   },
 });
 
-function writeReport(
+async function writeReport(
   output: AnalyzeOutput,
   root: string,
+  directory: string,
+  outfile: string | undefined,
   result: AnalysisResult,
-): void {
-  if (output === "json") {
-    process.stdout.write(`${renderJsonReport(result)}\n`);
+): Promise<void> {
+  if (output === "html") {
+    const html = renderHtmlReport(root, result);
+    const htmlPath = resolve(directory, outfile ?? "recss-report.html");
+    await writeOutputFile(htmlPath, html);
+    process.stdout.write(`HTML report written to ${htmlPath}\n`);
     return;
   }
 
-  process.stdout.write(`${renderConsoleReport(root, result)}\n`);
+  if (output === "json") {
+    const json = `${renderJsonReport(result)}\n`;
+    if (outfile) {
+      const outputPath = resolve(directory, outfile);
+      await writeOutputFile(outputPath, json);
+      process.stdout.write(`JSON report written to ${outputPath}\n`);
+      return;
+    }
+
+    process.stdout.write(json);
+    return;
+  }
+
+  const text = `${renderConsoleReport(root, result)}\n`;
+  if (outfile) {
+    const outputPath = resolve(directory, outfile);
+    await writeOutputFile(outputPath, text);
+    process.stdout.write(`Console report written to ${outputPath}\n`);
+    return;
+  }
+
+  process.stdout.write(text);
+}
+
+async function writeOutputFile(path: string, content: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, content, "utf8");
 }

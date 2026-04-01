@@ -21,4 +21,14 @@ describe("normalizeConfig", () => {
     expect(config.safelist[0]).toBe("active");
     expect(config.safelist[1]).toEqual(/^is-/);
   });
+
+  it("should accept html report format", () => {
+    const config = normalizeConfig({
+      report: {
+        format: "html",
+      },
+    });
+
+    expect(config.report.format).toBe("html");
+  });
 });

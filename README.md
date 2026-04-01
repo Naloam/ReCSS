@@ -18,15 +18,15 @@ Phase 1 is delivered and core Phase 2 capabilities are in place. You can run unu
 - Detect unused CSS/SCSS class selectors from Vue/React/HTML source references
 - Keep dynamic classes conservative and out of unused reports
 - Detect specificity conflicts with threshold-based CLI failure mode
-- Support `console` and `json` outputs
+- Support `console`, `json`, and `html` outputs
 - Support config loading (`recss.config.ts/js/mjs` and `package.json#recss`)
 - Provide `recss init` to bootstrap config
 
 Deferred:
+
 - CSS modules migration assistant
 - Vite plugin integration
 - VSCode extension
-- HTML report format
 
 ## Workspace
 
@@ -49,7 +49,7 @@ pnpm -r test
 ## CLI
 
 ```bash
-recss analyze [dir] [--framework auto|vue|react|html] [--output console|json] [--config <path>] [--safelist a,b]
+recss analyze [dir] [--framework auto|vue|react|html] [--output console|json|html] [--config <path>] [--safelist a,b] [--outfile report-path]
 recss check [dir] [--framework auto|vue|react|html] [--threshold 0] [--config <path>]
 recss init [dir]
 ```
@@ -58,6 +58,7 @@ recss init [dir]
 
 Current name remains ReCSS, which is short and intention-revealing.
 Alternative optional names:
+
 - StyleDebt
 - ClassAudit
 - CascadeGuard
