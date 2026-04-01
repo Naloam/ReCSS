@@ -1,0 +1,31 @@
+.card {
+  padding: 16px;
+}
+
+.card-header {
+  font-weight: 600;
+}
+
+.card-body {
+  padding: 8px;
+}
+
+.card-footer {
+  margin-top: 12px;
+}
+
+.card-title {
+  font-size: 18px;
+}
+
+.card-ghost {
+  opacity: 0.5;
+}
+
+.card-overlay {
+  position: absolute;
+}
+
+.dynamicClass {
+  border: 1px dashed #999;
+}
