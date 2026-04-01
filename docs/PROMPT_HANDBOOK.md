@@ -2,6 +2,12 @@
 
 This handbook is extracted from the master plan and normalized for practical execution.
 
+## Completion Status
+
+- Completed: Round 0 to Round 9
+- In Progress: Round 10
+- Optional backlog: Round 11
+
 ## Round 0 - Bootstrap
 Initialize pnpm monorepo with packages/core, packages/cli, packages/vite-plugin and base configs.
 

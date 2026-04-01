@@ -1,7 +1,7 @@
 # ReCSS Project Plan
 
-Version: v1.2  
-Status: Ready for Phase 1 implementation
+Version: v1.3  
+Status: Phase 1 delivered, Phase 2 in progress
 
 ## 1. Project Overview
 
@@ -11,15 +11,16 @@ ReCSS is a focused CSS health analyzer for large front-end repositories. It favo
 ### Scope
 In scope for the current baseline:
 - Detect unused CSS and SCSS class selectors from source code references
-- Provide a Vue-first `recss analyze` workflow
+- Provide `recss analyze` workflow with config support
+- Provide `recss check` workflow for specificity conflict checks
+- Provide `recss init` config scaffold command
 - Generate console and json reports
-- Preserve a typed `defineConfig()` entry for future config loading
+- Support `defineConfig()` + config loading from config files and package.json
 
-Out of scope for Phase 1:
+Out of scope for current implementation:
 - Production CSS tree-shaking (PurgeCSS territory)
 - CSS-in-JS (styled-components, emotion)
 - Less support
-- Specificity conflict detection
 - CSS Modules migration automation
 - Vite and IDE integrations
 
@@ -40,13 +41,15 @@ Key libraries:
 - postcss + postcss-scss
 - css-tree
 - @vue/compiler-sfc
+- @babel/parser
 - fast-glob
 - zod
+- specificity
 
 Deferred to later phases:
-- @babel/parser + @babel/traverse
-- node-html-parser
-- specificity
+- HTML report
+- Vite plugin
+- VSCode extension
 
 ## 3. Features and Boundaries
 
@@ -58,7 +61,8 @@ Deferred to later phases:
 - CLI output supports `console` and `json`
 
 ### F2: Specificity Conflict Detection
-- Deferred to Phase 2 after the unused-class pipeline is stable
+- Implemented via `recss check`
+- Includes `!important` usage reporting and threshold-based exit code
 
 ### F3: CSS Modules Migration Assistant
 - Deferred to the future backlog
@@ -70,19 +74,19 @@ Current command:
 
 ```bash
 recss analyze [dir]
+recss check [dir]
+recss init [dir]
 ```
 
 Planned later:
 
 ```bash
-recss check [dir]
-recss init
 recss migrate <component-dir>
 ```
 
 ## 5. Development Roadmap
 
-### Phase 1 (2-3 weeks, MVP)
+### Phase 1 (delivered)
 - Monorepo setup
 - Typed config helper
 - CSS parser
@@ -92,16 +96,17 @@ recss migrate <component-dir>
 - `analyze` command
 - Basic fixtures and tests
 
-### Phase 2 (optional after MVP)
-- React scanner
-- Specificity analyzer and `check` command
-- Config loader
-- HTML report
+### Phase 2 (in progress)
+- React scanner: delivered
+- Specificity analyzer and `check` command: delivered
+- Config loader: delivered
+- HTML report: not started
 
 ### Future Backlog
 - CSS Modules migration assistant
 - Vite plugin
 - VSCode extension
+- Reporter formats beyond console/json
 
 ## 6. Acceptance Criteria
 
@@ -115,3 +120,18 @@ Expected:
 - Detect unused classes with line-level output
 - Finish on medium project in reasonable time (seconds level)
 - No crash on parser edge cases
+
+## 7. Delivery Snapshot
+
+Delivered commands:
+- `recss analyze`
+- `recss check`
+- `recss init`
+
+Delivered analysis modules:
+- Unused class analyzer
+- Specificity conflict analyzer
+
+Delivered validation baseline:
+- Unit tests + parser tests + e2e fixture tests
+- `core` and `cli` build/lint/test green before each step commit

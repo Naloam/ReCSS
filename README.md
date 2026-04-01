@@ -11,14 +11,22 @@ ReCSS is a focused TypeScript tool for CSS health analysis in large codebases. I
 
 ## Current Status
 
-Scaffold baseline is ready. Phase 1 is scoped to `recss analyze` for Vue-first unused class detection, with `check`, `migrate`, and editor/build-tool integrations deferred.
+Phase 1 is delivered and core Phase 2 capabilities are in place. You can run unused-class analysis, specificity checks, and config initialization from CLI.
 
-## Current MVP Boundary
+## Current Scope
 
-- Detect unused CSS and SCSS class selectors from Vue source references
+- Detect unused CSS/SCSS class selectors from Vue/React/HTML source references
 - Keep dynamic classes conservative and out of unused reports
-- Support `console` and `json` output targets
-- Reserve specificity checks, migration helpers, and Vite integration for later phases
+- Detect specificity conflicts with threshold-based CLI failure mode
+- Support `console` and `json` outputs
+- Support config loading (`recss.config.ts/js/mjs` and `package.json#recss`)
+- Provide `recss init` to bootstrap config
+
+Deferred:
+- CSS modules migration assistant
+- Vite plugin integration
+- VSCode extension
+- HTML report format
 
 ## Workspace
 
@@ -36,6 +44,14 @@ Scaffold baseline is ready. Phase 1 is scoped to `recss analyze` for Vue-first u
 pnpm install
 pnpm -r build
 pnpm -r test
+```
+
+## CLI
+
+```bash
+recss analyze [dir] [--framework auto|vue|react|html] [--output console|json] [--config <path>] [--safelist a,b]
+recss check [dir] [--framework auto|vue|react|html] [--threshold 0] [--config <path>]
+recss init [dir]
 ```
 
 ## Name Note
