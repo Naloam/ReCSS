@@ -52,6 +52,7 @@ pnpm -r test
 recss analyze [dir] [--framework auto|vue|react|html] [--output console|json|html] [--config <path>] [--safelist a,b] [--outfile report-path]
 recss check [dir] [--framework auto|vue|react|html] [--threshold 0] [--config <path>]
 recss init [dir]
+recss migrate [component-dir]
 ```
 
 ## Release Prep
