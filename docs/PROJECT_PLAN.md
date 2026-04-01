@@ -17,7 +17,7 @@ In scope for the current baseline:
 - Provide `recss analyze` workflow with config support
 - Provide `recss check` workflow for specificity conflict checks
 - Provide `recss init` config scaffold command
-- Generate console and json reports
+- Generate console, json, and html reports
 - Support `defineConfig()` + config loading from config files and package.json
 
 Out of scope for current implementation:
@@ -54,7 +54,6 @@ Key libraries:
 
 Deferred to later phases:
 
-- HTML report
 - Vite plugin
 - VSCode extension
 
@@ -66,7 +65,7 @@ Deferred to later phases:
 - Support static extraction from Vue SFC templates first
 - Dynamic classes are uncertain and excluded from unused reports
 - Safelist supports string and RegExp entries in config
-- CLI output supports `console` and `json`
+- CLI output supports `console`, `json`, and `html`
 
 ### F2: Specificity Conflict Detection
 
@@ -153,7 +152,7 @@ Delivered validation baseline:
 - Unit tests + parser tests + e2e fixture tests
 - `core` and `cli` build/lint/test green before each step commit
 
-Release prep snapshot (Round 10, in progress):
+Release prep snapshot (Round 10, delivered):
 
 - CI workflow added for lint/test/build gates
 - Changeset config added for package versioning and publish flow

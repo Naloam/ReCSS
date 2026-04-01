@@ -4,8 +4,7 @@ This handbook is extracted from the master plan and normalized for practical exe
 
 ## Completion Status
 
-- Completed: Round 0 to Round 9
-- In Progress: Round 10
+- Completed: Round 0 to Round 10
 - Optional backlog: Round 11
 
 ## Round 0 - Bootstrap

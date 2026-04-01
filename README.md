@@ -66,6 +66,7 @@ GitHub Actions:
 
 - CI workflow: `.github/workflows/ci.yml`
 - Release workflow: `.github/workflows/release.yml` (requires `NPM_TOKEN` secret)
+- Detailed guide: `docs/RELEASE.md`
 
 ## Name Note
 
