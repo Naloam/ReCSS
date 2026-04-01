@@ -40,3 +40,24 @@ export type SourceScanResult = {
   used: Set<string>
   uncertain: Set<string>
 }
+
+export type ScanOptions = {
+  root: string
+  cssInclude: string[]
+  cssExclude: string[]
+  sourceInclude: string[]
+  sourceExclude: string[]
+}
+
+export type ScanResult = {
+  cssFiles: string[]
+  vueFiles: string[]
+  jsxFiles: string[]
+  htmlFiles: string[]
+}
+
+export type ParseAllResult = {
+  cssResult: CssParseResult
+  usedClasses: Set<string>
+  uncertainClasses: Set<string>
+}
