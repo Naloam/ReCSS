@@ -4,6 +4,7 @@ export {
   parseCssFile,
   parseCssFiles,
 } from "./parser/css-parser.js";
+export { parseVueCode, parseVueFile } from './parser/vue-parser.js'
 export type {
   ClassDefinition,
   CssParseResult,
@@ -13,4 +14,5 @@ export type {
   RecssReportFormat,
   RecssReportOptions,
   SafelistPattern,
+  SourceScanResult,
 } from "./types.js";

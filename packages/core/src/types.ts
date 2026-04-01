@@ -35,3 +35,8 @@ export type ClassDefinition = {
 }
 
 export type CssParseResult = Map<string, ClassDefinition[]>
+
+export type SourceScanResult = {
+  used: Set<string>
+  uncertain: Set<string>
+}
