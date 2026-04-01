@@ -10,6 +10,7 @@ export {
 export {
   renderConsoleReport,
   renderHtmlReport,
+  renderMarkdownReport,
   renderJsonReport,
 } from "./reporter/index.js";
 export {

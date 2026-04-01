@@ -4,3 +4,8 @@ dist/
 .recss-cache/
 coverage/
 .DS_Store
+# Prompt-related docs should remain local and not be pushed
+docs/prompts/
+docs/PROMPT_HANDBOOK.md
+docs/PROMPT_HANDBOOK_FULL.md
+.vscode/

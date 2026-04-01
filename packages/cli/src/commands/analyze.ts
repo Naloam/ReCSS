@@ -4,6 +4,7 @@ import {
   loadConfig,
   renderConsoleReport,
   renderHtmlReport,
+  renderMarkdownReport,
   renderJsonReport,
   type AnalysisResult,
   type RecssFramework,
@@ -12,7 +13,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 const supportedFrameworks = ["auto", "vue", "react", "html"] as const;
-const supportedOutputs = ["console", "json", "html"] as const;
+const supportedOutputs = ["console", "json", "html", "markdown"] as const;
 
 type AnalyzeFramework = (typeof supportedFrameworks)[number];
 type AnalyzeOutput = (typeof supportedOutputs)[number];
@@ -43,7 +44,7 @@ export const analyzeCommand = defineCommand({
     },
     output: {
       type: "string",
-      description: "Output format: console, json, or html.",
+      description: "Output format: console, json, html, or markdown.",
     },
     config: {
       type: "string",
@@ -133,6 +134,19 @@ async function writeReport(
     }
 
     process.stdout.write(json);
+    return;
+  }
+
+  if (output === "markdown") {
+    const markdown = `${renderMarkdownReport(root, result)}\n`;
+    if (outfile) {
+      const outputPath = resolve(directory, outfile);
+      await writeOutputFile(outputPath, markdown);
+      process.stdout.write(`Markdown report written to ${outputPath}\n`);
+      return;
+    }
+
+    process.stdout.write(markdown);
     return;
   }
 

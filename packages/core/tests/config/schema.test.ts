@@ -31,4 +31,14 @@ describe("normalizeConfig", () => {
 
     expect(config.report.format).toBe("html");
   });
+
+  it("should accept markdown report format", () => {
+    const config = normalizeConfig({
+      report: {
+        format: "markdown",
+      },
+    });
+
+    expect(config.report.format).toBe("markdown");
+  });
 });
