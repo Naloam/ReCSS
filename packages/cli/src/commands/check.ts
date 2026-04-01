@@ -61,7 +61,8 @@ export const checkCommand = defineCommand({
   },
   async run({ args }): Promise<void> {
     const directory = typeof args.dir === "string" ? args.dir : ".";
-    const configPath = typeof args.config === "string" ? args.config : undefined;
+    const configPath =
+      typeof args.config === "string" ? args.config : undefined;
     const config = await loadConfig(directory, configPath);
     const framework =
       typeof args.framework === "string" && isCheckFramework(args.framework)
@@ -78,7 +79,9 @@ export const checkCommand = defineCommand({
     const scanResult = await scanFiles({
       root: analysisRoot,
       cssInclude:
-        config.css.include.length > 0 ? config.css.include : ["**/*.{css,scss}"],
+        config.css.include.length > 0
+          ? config.css.include
+          : ["**/*.{css,scss}"],
       cssExclude:
         config.css.exclude.length > 0
           ? config.css.exclude
