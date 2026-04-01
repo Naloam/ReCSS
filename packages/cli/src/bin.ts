@@ -1,6 +1,7 @@
 import { defineCommand, runMain } from 'citty'
 
 import { analyzeCommand } from './commands/analyze.js'
+import { checkCommand } from './commands/check.js'
 
 const main = defineCommand({
   meta: {
@@ -10,6 +11,7 @@ const main = defineCommand({
   },
   subCommands: {
     analyze: analyzeCommand,
+    check: checkCommand,
   },
 })
 
