@@ -128,3 +128,8 @@ export type MigrationSuggestion = {
   suggestedModuleFile: string;
   classNames: string[];
 };
+
+export type MigrationApplyResult = {
+  copiedFiles: number;
+  updatedSourceFiles: number;
+};

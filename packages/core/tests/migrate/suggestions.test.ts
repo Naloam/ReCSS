@@ -1,10 +1,11 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import {
+  applyMigrationSuggestions,
   buildMigrationSuggestions,
   collectStyleFiles,
   extractClassNames,
@@ -34,6 +35,36 @@ describe("migrate helpers", () => {
       const suggestions = await buildMigrationSuggestions(root);
       expect(suggestions).toHaveLength(1);
       expect(suggestions[0]?.suggestedModuleFile.endsWith("card.module.scss")).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("should apply migration and rewrite react className literals", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "recss-core-migrate-apply-"));
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.card-title { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        'import "./card.scss";\nexport const Card = () => <div className="card card-title" />;\n',
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      const result = await applyMigrationSuggestions(root, suggestions);
+
+      expect(result.copiedFiles).toBe(1);
+      expect(result.updatedSourceFiles).toBe(1);
+
+      const rewritten = await readFile(resolve(root, "src/components/Card.tsx"), "utf8");
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain('className={[styles.card, styles["card-title"]].join(" ")}');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
