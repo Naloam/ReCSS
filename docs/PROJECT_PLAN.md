@@ -1,15 +1,18 @@
 # ReCSS Project Plan
 
-Version: v1.3  
-Status: Phase 1 delivered, Phase 2 in progress
+Version: v1.4  
+Status: Phase 2 delivered, future backlog in progress
 
 ## 1. Project Overview
 
 ### Positioning
+
 ReCSS is a focused CSS health analyzer for large front-end repositories. It favors static analysis, actionable reports, and a tightly scoped MVP over broad platform ambitions.
 
 ### Scope
+
 In scope for the current baseline:
+
 - Detect unused CSS and SCSS class selectors from source code references
 - Provide `recss analyze` workflow with config support
 - Provide `recss check` workflow for specificity conflict checks
@@ -18,6 +21,7 @@ In scope for the current baseline:
 - Support `defineConfig()` + config loading from config files and package.json
 
 Out of scope for current implementation:
+
 - Production CSS tree-shaking (PurgeCSS territory)
 - CSS-in-JS (styled-components, emotion)
 - Less support
@@ -25,6 +29,7 @@ Out of scope for current implementation:
 - Vite and IDE integrations
 
 ### Users
+
 - Engineers inheriting legacy front-end projects
 - Tech leads paying down style debt
 - Teams that want a safe first pass before deeper CSS refactors
@@ -38,6 +43,7 @@ File Scanner -> AST Parsers -> Analyzer Engine -> Reporters -> CLI
 ```
 
 Key libraries:
+
 - postcss + postcss-scss
 - css-tree
 - @vue/compiler-sfc
@@ -47,6 +53,7 @@ Key libraries:
 - specificity
 
 Deferred to later phases:
+
 - HTML report
 - Vite plugin
 - VSCode extension
@@ -54,6 +61,7 @@ Deferred to later phases:
 ## 3. Features and Boundaries
 
 ### F1: Unused Class Detection
+
 - Output by file with line info
 - Support static extraction from Vue SFC templates first
 - Dynamic classes are uncertain and excluded from unused reports
@@ -61,10 +69,12 @@ Deferred to later phases:
 - CLI output supports `console` and `json`
 
 ### F2: Specificity Conflict Detection
+
 - Implemented via `recss check`
 - Includes `!important` usage reporting and threshold-based exit code
 
 ### F3: CSS Modules Migration Assistant
+
 - Deferred to the future backlog
 - If implemented later, it stays component-scoped and diff-first
 
@@ -87,6 +97,7 @@ recss migrate <component-dir>
 ## 5. Development Roadmap
 
 ### Phase 1 (delivered)
+
 - Monorepo setup
 - Typed config helper
 - CSS parser
@@ -96,13 +107,15 @@ recss migrate <component-dir>
 - `analyze` command
 - Basic fixtures and tests
 
-### Phase 2 (in progress)
+### Phase 2 (delivered)
+
 - React scanner: delivered
 - Specificity analyzer and `check` command: delivered
 - Config loader: delivered
-- HTML report: not started
+- HTML report: delivered
 
 ### Future Backlog
+
 - CSS Modules migration assistant
 - Vite plugin
 - VSCode extension
@@ -117,6 +130,7 @@ npx recss analyze ./examples/vue-demo --framework vue
 ```
 
 Expected:
+
 - Detect unused classes with line-level output
 - Finish on medium project in reasonable time (seconds level)
 - No crash on parser edge cases
@@ -124,14 +138,17 @@ Expected:
 ## 7. Delivery Snapshot
 
 Delivered commands:
+
 - `recss analyze`
 - `recss check`
 - `recss init`
 
 Delivered analysis modules:
+
 - Unused class analyzer
 - Specificity conflict analyzer
 
 Delivered validation baseline:
+
 - Unit tests + parser tests + e2e fixture tests
 - `core` and `cli` build/lint/test green before each step commit

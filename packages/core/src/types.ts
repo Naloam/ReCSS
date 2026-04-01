@@ -1,6 +1,6 @@
 export type RecssFramework = "auto" | "vue" | "react" | "html";
 
-export type RecssReportFormat = "console" | "json";
+export type RecssReportFormat = "console" | "json" | "html";
 
 export type SafelistPattern = RegExp | string;
 
@@ -117,8 +117,8 @@ export type AnalyzeOptions = {
   root: string;
   framework?: RecssFramework;
   safelist?: SafelistPattern[];
-  cssInclude?: string[]
-  cssExclude?: string[]
-  sourceInclude?: string[]
-  sourceExclude?: string[]
+  cssInclude?: string[];
+  cssExclude?: string[];
+  sourceInclude?: string[];
+  sourceExclude?: string[];
 };
