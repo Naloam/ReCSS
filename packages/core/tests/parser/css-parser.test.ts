@@ -14,6 +14,18 @@ describe("parseCssCode", () => {
     expect(definitions).toHaveLength(1);
     expect(definitions?.[0].selector).toBe(".button");
     expect(definitions?.[0].properties).toEqual(["color", "background"]);
+    expect(definitions?.[0].declarations).toEqual([
+      {
+        property: 'color',
+        value: 'red',
+        important: false,
+      },
+      {
+        property: 'background',
+        value: 'white',
+        important: false,
+      },
+    ])
   });
 
   it("should resolve nested scss selectors", async () => {

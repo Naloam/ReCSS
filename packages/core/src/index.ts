@@ -1,5 +1,5 @@
 export { defineConfig } from "./config.js";
-export { analyzeProject, analyzeUnused } from './analyzer/index.js'
+export { analyzeProject, analyzeSpecificity, analyzeUnused } from './analyzer/index.js'
 export { renderConsoleReport, renderJsonReport } from './reporter/index.js'
 export {
   parseCssCode,
@@ -14,6 +14,7 @@ export { scanFiles } from './scanner/index.js'
 export type {
   AnalysisResult,
   AnalyzeOptions,
+  ClassDeclaration,
   ClassDefinition,
   CssParseResult,
   ParseAllResult,
@@ -25,6 +26,9 @@ export type {
   ScanOptions,
   ScanResult,
   SafelistPattern,
+  SpecificityAnalysisResult,
+  SpecificityConflict,
+  SpecificityConflictEntry,
   SourceScanResult,
   UnusedAnalysisResult,
   UnusedClass,

@@ -8,6 +8,7 @@ import { analyzeUnused } from './unused.js'
 import type { AnalysisResult, AnalyzeOptions, RecssFramework } from '../types.js'
 
 export { analyzeUnused } from './unused.js'
+export { analyzeSpecificity } from './specificity.js'
 
 function getSourceIncludeByFramework(framework: RecssFramework): string[] {
 	if (framework === 'vue') {
