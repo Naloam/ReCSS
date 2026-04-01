@@ -82,3 +82,9 @@ export type UnusedAnalysisResult = {
 export type AnalysisResult = {
   unused: UnusedAnalysisResult
 }
+
+export type AnalyzeOptions = {
+  root: string
+  framework?: RecssFramework
+  safelist?: SafelistPattern[]
+}
