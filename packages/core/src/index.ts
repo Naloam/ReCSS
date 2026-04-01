@@ -24,6 +24,7 @@ export { parseJsxCode, parseJsxFile } from "./parser/jsx-parser.js";
 export { parseVueCode, parseVueFile } from "./parser/vue-parser.js";
 export { scanFiles } from "./scanner/index.js";
 export {
+  applyMigrationSuggestions,
   buildMigrationSuggestions,
   collectStyleFiles,
   extractClassNames,
@@ -35,6 +36,7 @@ export type {
   ClassDefinition,
   CssParseResult,
   ParseAllResult,
+  MigrationApplyResult,
   MigrationSuggestion,
   RecssConfig,
   RecssFileMatch,

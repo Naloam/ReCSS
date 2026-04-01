@@ -1,51 +1,39 @@
-import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 
-import { describe, expect, it } from "vitest";
+const buildMigrationSuggestionsMock = vi.hoisted(() => vi.fn());
+const applyMigrationSuggestionsMock = vi.hoisted(() => vi.fn());
 
-import { applyMigrationSuggestions } from "../src/commands/migrate.js";
+vi.mock("@recss/core", () => {
+  return {
+    buildMigrationSuggestions: buildMigrationSuggestionsMock,
+    applyMigrationSuggestions: applyMigrationSuggestionsMock,
+  };
+});
 
-describe("applyMigrationSuggestions", () => {
-  it("should create module files and update imports", async () => {
-    const root = await mkdtemp(resolve(tmpdir(), "recss-migrate-"));
+import { migrateCommand } from "../src/commands/migrate.js";
 
-    try {
-      await mkdir(resolve(root, "src/components"), { recursive: true });
-      await writeFile(
-        resolve(root, "src/components/card.scss"),
-        ".card { display: block; }\n.card-title { color: red; }",
-        "utf8",
-      );
-      await writeFile(
-        resolve(root, "src/components/button.module.scss"),
-        ".btn { color: blue; }",
-        "utf8",
-      );
+describe("migrateCommand", () => {
+  it("should call core apply flow when --apply is true", async () => {
+    buildMigrationSuggestionsMock.mockResolvedValueOnce([
+      {
+        file: "/workspace/src/card.scss",
+        suggestedModuleFile: "/workspace/src/card.module.scss",
+        classNames: ["card"],
+      },
+    ]);
+    applyMigrationSuggestionsMock.mockResolvedValueOnce({
+      copiedFiles: 1,
+      updatedSourceFiles: 1,
+    });
 
-      const suggestions = [
-        {
-          file: resolve(root, "src/components/card.scss"),
-          suggestedModuleFile: resolve(root, "src/components/card.module.scss"),
-          classNames: ["card", "card-title"],
-        },
-      ];
+    await migrateCommand.run?.({
+      args: {
+        dir: "/workspace",
+        apply: true,
+      },
+    } as never);
 
-      await writeFile(
-        resolve(root, "src/components/Card.tsx"),
-        'import "./card.scss";\nexport const Card = () => null;\n',
-        "utf8",
-      );
-
-      const result = await applyMigrationSuggestions(root, suggestions);
-
-      expect(result.copiedFiles).toBe(1);
-      expect(result.updatedSourceFiles).toBe(1);
-
-      const updated = await readFile(resolve(root, "src/components/Card.tsx"), "utf8");
-      expect(updated).toContain("./card.module.scss");
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    expect(buildMigrationSuggestionsMock).toHaveBeenCalledWith("/workspace");
+    expect(applyMigrationSuggestionsMock).toHaveBeenCalledTimes(1);
   });
 });
