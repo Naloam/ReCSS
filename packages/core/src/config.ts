@@ -1,5 +1,5 @@
-import type { RecssConfig } from './types.js'
+import type { RecssCoreConfig } from './config/schema.js'
 
-export function defineConfig(config: RecssConfig): RecssConfig {
+export function defineConfig(config: RecssCoreConfig): RecssCoreConfig {
   return config
 }
