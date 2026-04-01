@@ -9,6 +9,6 @@
 </template>
 
 <script setup lang="ts">
-const isActive = true
-const dynamicClass = 'runtime-generated'
+const isActive = true;
+const dynamicClass = "runtime-generated";
 </script>
