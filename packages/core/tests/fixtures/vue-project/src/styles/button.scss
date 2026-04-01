@@ -1,0 +1,24 @@
+.btn {
+  border: 0;
+}
+
+.btn-primary {
+  color: red;
+  background: #eee;
+}
+
+.panel .btn-primary {
+  color: blue;
+}
+
+.btn-secondary {
+  color: #222;
+}
+
+.btn-ghost {
+  color: #999;
+}
+
+.btn-disabled {
+  opacity: 0.4;
+}
