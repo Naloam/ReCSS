@@ -88,16 +88,20 @@ function extractClassNames(selector: string): string[] {
   return [...names]
 }
 
-function collectProperties(rule: Rule): string[] {
-  const properties = new Set<string>()
+function collectDeclarations(rule: Rule): ClassDefinition['declarations'] {
+  const declarations: ClassDefinition['declarations'] = []
 
   for (const node of rule.nodes ?? []) {
     if (node.type === 'decl') {
-      properties.add(node.prop)
+      declarations.push({
+        property: node.prop,
+        value: node.value,
+        important: Boolean(node.important),
+      })
     }
   }
 
-  return [...properties]
+  return declarations
 }
 
 function getSpecificity(selector: string): [number, number, number] {
@@ -131,7 +135,8 @@ export async function parseCssCode(filePath: string, sourceCode: string): Promis
       }
 
       const resolvedSelectors = resolveSelectors(rule)
-      const properties = collectProperties(rule)
+      const declarations = collectDeclarations(rule)
+      const properties = [...new Set(declarations.map((item) => item.property))]
       const line = rule.source?.start?.line ?? 0
       const column = rule.source?.start?.column ?? 0
 
@@ -151,6 +156,7 @@ export async function parseCssCode(filePath: string, sourceCode: string): Promis
             column,
             specificity,
             properties,
+            declarations,
           })
         }
       }

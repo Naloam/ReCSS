@@ -32,6 +32,13 @@ export type ClassDefinition = {
   column: number
   specificity: [number, number, number]
   properties: string[]
+  declarations: ClassDeclaration[]
+}
+
+export type ClassDeclaration = {
+  property: string
+  value: string
+  important: boolean
 }
 
 export type CssParseResult = Map<string, ClassDefinition[]>
@@ -81,6 +88,29 @@ export type UnusedAnalysisResult = {
 
 export type AnalysisResult = {
   unused: UnusedAnalysisResult
+}
+
+export type SpecificityConflictEntry = {
+  value: string
+  specificity: [number, number, number]
+  file: string
+  line: number
+  isImportant: boolean
+}
+
+export type SpecificityConflict = {
+  className: string
+  property: string
+  definitions: SpecificityConflictEntry[]
+}
+
+export type SpecificityAnalysisResult = {
+  conflicts: SpecificityConflict[]
+  importantUsage: ClassDefinition[]
+  stats: {
+    totalConflicts: number
+    importantCount: number
+  }
 }
 
 export type AnalyzeOptions = {
