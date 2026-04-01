@@ -23,3 +23,15 @@ export type RecssConfig = {
   safelist?: SafelistPattern[]
   sources?: RecssFileMatch
 }
+
+export type ClassDefinition = {
+  name: string
+  selector: string
+  file: string
+  line: number
+  column: number
+  specificity: [number, number, number]
+  properties: string[]
+}
+
+export type CssParseResult = Map<string, ClassDefinition[]>
