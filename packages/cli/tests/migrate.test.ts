@@ -1,13 +1,13 @@
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { buildMigrationSuggestions } from "../src/commands/migrate.js";
+import { applyMigrationSuggestions } from "../src/commands/migrate.js";
 
-describe("buildMigrationSuggestions", () => {
-  it("should collect css/scss files and propose module names", async () => {
+describe("applyMigrationSuggestions", () => {
+  it("should create module files and update imports", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "recss-migrate-"));
 
     try {
@@ -23,12 +23,27 @@ describe("buildMigrationSuggestions", () => {
         "utf8",
       );
 
-      const suggestions = await buildMigrationSuggestions(root);
+      const suggestions = [
+        {
+          file: resolve(root, "src/components/card.scss"),
+          suggestedModuleFile: resolve(root, "src/components/card.module.scss"),
+          classNames: ["card", "card-title"],
+        },
+      ];
 
-      expect(suggestions).toHaveLength(1);
-      expect(suggestions[0]?.file.endsWith("card.scss")).toBe(true);
-      expect(suggestions[0]?.suggestedModuleFile.endsWith("card.module.scss")).toBe(true);
-      expect(suggestions[0]?.classNames).toEqual(["card", "card-title"]);
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        'import "./card.scss";\nexport const Card = () => null;\n',
+        "utf8",
+      );
+
+      const result = await applyMigrationSuggestions(root, suggestions);
+
+      expect(result.copiedFiles).toBe(1);
+      expect(result.updatedSourceFiles).toBe(1);
+
+      const updated = await readFile(resolve(root, "src/components/Card.tsx"), "utf8");
+      expect(updated).toContain("./card.module.scss");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
