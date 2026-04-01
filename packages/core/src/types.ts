@@ -61,3 +61,20 @@ export type ParseAllResult = {
   usedClasses: Set<string>
   uncertainClasses: Set<string>
 }
+
+export type UnusedClass = {
+  name: string
+  definitions: ClassDefinition[]
+}
+
+export type UnusedAnalysisResult = {
+  unused: UnusedClass[]
+  skipped: string[]
+  stats: {
+    totalCssClasses: number
+    usedClasses: number
+    unusedClasses: number
+    uncertainClasses: number
+    safelistedClasses: number
+  }
+}
