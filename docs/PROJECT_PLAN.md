@@ -157,3 +157,4 @@ Release prep snapshot (Round 10, in progress):
 
 - CI workflow added for lint/test/build gates
 - Changeset config added for package versioning and publish flow
+- Release workflow added to automate version PR/publish
