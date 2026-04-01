@@ -12,7 +12,7 @@ const FileMatchSchema = z
 
 const ReportSchema = z
   .object({
-    format: z.enum(["console", "json", "html"]).default("console"),
+    format: z.enum(["console", "json", "html", "markdown"]).default("console"),
     outfile: z.string().optional(),
     minUnusedThreshold: z.number().default(0),
   })

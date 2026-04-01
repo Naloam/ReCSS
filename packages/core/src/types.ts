@@ -1,6 +1,6 @@
 export type RecssFramework = "auto" | "vue" | "react" | "html";
 
-export type RecssReportFormat = "console" | "json" | "html";
+export type RecssReportFormat = "console" | "json" | "html" | "markdown";
 
 export type SafelistPattern = RegExp | string;
 
