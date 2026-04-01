@@ -51,6 +51,7 @@ Build the Vue fixture project and end-to-end tests for unused-class detection.
 ## Round 10 - Release Prep
 
 Complete README, package metadata, CI workflow, and changeset config.
+Current progress: CI workflow and changeset config delivered.
 
 ## Round 11 - Optional Vite Plugin
 

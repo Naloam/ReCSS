@@ -152,3 +152,8 @@ Delivered validation baseline:
 
 - Unit tests + parser tests + e2e fixture tests
 - `core` and `cli` build/lint/test green before each step commit
+
+Release prep snapshot (Round 10, in progress):
+
+- CI workflow added for lint/test/build gates
+- Changeset config added for package versioning and publish flow

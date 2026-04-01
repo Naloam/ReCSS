@@ -54,6 +54,14 @@ recss check [dir] [--framework auto|vue|react|html] [--threshold 0] [--config <p
 recss init [dir]
 ```
 
+## Release Prep
+
+```bash
+pnpm changeset
+pnpm version-packages
+pnpm release
+```
+
 ## Name Note
 
 Current name remains ReCSS, which is short and intention-revealing.
