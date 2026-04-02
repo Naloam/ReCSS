@@ -36,11 +36,22 @@ export async function analyzeProject(
   const root = resolve(options.root);
   const framework = options.framework ?? "auto";
   const safelist = options.safelist ?? [];
-  const cssInclude = options.cssInclude ?? ["**/*.{css,scss}"];
-  const cssExclude = options.cssExclude ?? ["**/*.module.{css,scss}"];
+  const cssInclude =
+    options.cssInclude && options.cssInclude.length > 0
+      ? options.cssInclude
+      : ["**/*.{css,scss}"];
+  const cssExclude =
+    options.cssExclude && options.cssExclude.length > 0
+      ? options.cssExclude
+      : ["**/*.module.{css,scss}"];
   const sourceInclude =
-    options.sourceInclude ?? getSourceIncludeByFramework(framework);
-  const sourceExclude = options.sourceExclude ?? ["**/*.test.*", "**/*.spec.*"];
+    options.sourceInclude && options.sourceInclude.length > 0
+      ? options.sourceInclude
+      : getSourceIncludeByFramework(framework);
+  const sourceExclude =
+    options.sourceExclude && options.sourceExclude.length > 0
+      ? options.sourceExclude
+      : ["**/*.test.*", "**/*.spec.*"];
 
   const scanResult = await scanFiles({
     root,
