@@ -327,24 +327,6 @@ function preserveReactNode(
   };
 }
 
-function getReactExpressionKind(expression: ReactAstNode): ReactExpressionKind {
-  switch (expression.type) {
-    case "ArrayExpression":
-      return "array";
-    case "CallExpression":
-      return "call";
-    case "MemberExpression":
-    case "OptionalMemberExpression":
-      return "member";
-    case "StringLiteral":
-      return "string";
-    case "TemplateLiteral":
-      return "template";
-    default:
-      return "other";
-  }
-}
-
 function walkReactAst(
   node: unknown,
   visit: (node: ReactAstNode) => void,
@@ -474,6 +456,115 @@ function getStaticPropertyKey(node: ReactAstNode): string | undefined {
   }
 
   return undefined;
+}
+
+function getReactClassValueKind(expression: ReactAstNode): ReactExpressionKind {
+  switch (expression.type) {
+    case "ParenthesizedExpression": {
+      const nestedExpression = expression.expression as ReactAstNode | undefined;
+      return nestedExpression
+        ? getReactClassValueKind(nestedExpression)
+        : "other";
+    }
+    case "ArrayExpression":
+      return "array";
+    case "StringLiteral":
+      return "string";
+    case "TemplateLiteral":
+      return "template";
+    case "ConditionalExpression": {
+      const consequent = expression.consequent as ReactAstNode | undefined;
+      const alternate = expression.alternate as ReactAstNode | undefined;
+      if (!consequent || !alternate) {
+        return "other";
+      }
+
+      const consequentKind = getReactClassValueKind(consequent);
+      const alternateKind = getReactClassValueKind(alternate);
+      if (consequentKind === alternateKind) {
+        return consequentKind;
+      }
+
+      if (
+        (consequentKind === "array" && alternateKind === "other") ||
+        (consequentKind === "other" && alternateKind === "array")
+      ) {
+        return "array";
+      }
+
+      return "other";
+    }
+    case "LogicalExpression": {
+      const right = expression.right as ReactAstNode | undefined;
+      return right ? getReactClassValueKind(right) : "other";
+    }
+    case "CallExpression": {
+      const callee = expression.callee as ReactAstNode | undefined;
+      if (!callee) {
+        return "other";
+      }
+
+      if (callee.type === "Identifier") {
+        return KNOWN_CLASS_HELPERS.has(callee.name ?? "") ? "string" : "other";
+      }
+
+      if (
+        callee.type !== "MemberExpression" &&
+        callee.type !== "OptionalMemberExpression"
+      ) {
+        return "other";
+      }
+
+      const propertyName = getStaticPropertyKey(
+        callee.property as ReactAstNode,
+      );
+      const objectKind = getReactClassValueKind(callee.object as ReactAstNode);
+
+      if (propertyName === "join") {
+        return "string";
+      }
+
+      if (
+        objectKind === "array" &&
+        ["concat", "filter", "flat", "flatMap", "map", "slice"].includes(
+          propertyName ?? "",
+        )
+      ) {
+        return "array";
+      }
+
+      return "other";
+    }
+    default:
+      return "other";
+  }
+}
+
+function formatReactClassNameCode(
+  expression: ReactAstNode,
+  rewrittenCode: string,
+): string {
+  if (getReactClassValueKind(expression) !== "array") {
+    return rewrittenCode;
+  }
+
+  if (expression.type === "CallExpression") {
+    const callee = expression.callee as ReactAstNode | undefined;
+    if (
+      callee &&
+      (callee.type === "MemberExpression" ||
+        callee.type === "OptionalMemberExpression")
+    ) {
+      const propertyName = getStaticPropertyKey(
+        callee.property as ReactAstNode,
+      );
+      if (propertyName === "filter") {
+        return `${rewrittenCode}.join(" ")`;
+      }
+    }
+  }
+
+  return `${rewrittenCode}.filter(Boolean).join(" ")`;
 }
 
 function rewriteReactObjectProperty(
@@ -928,16 +1019,10 @@ function buildClassNameReplacement(
     return undefined;
   }
 
-  const expressionKind = getReactExpressionKind(expression);
-  const formattedCode =
-    expressionKind === "array"
-      ? `${rewritten.code}.filter(Boolean).join(" ")`
-      : rewritten.code;
-
   return {
     start: valueNode.start,
     end: valueNode.end,
-    value: `{${formattedCode}}`,
+    value: `{${formatReactClassNameCode(expression, rewritten.code)}}`,
   };
 }
 
