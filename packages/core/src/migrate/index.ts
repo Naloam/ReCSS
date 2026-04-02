@@ -218,6 +218,26 @@ function toVueStyleAccess(moduleAccessor: string, className: string): string {
   return `${moduleAccessor}["${className}"]`;
 }
 
+function removeSideEffectImport(content: string, importPath: string): string {
+  const escapedPath = escapeRegExp(importPath);
+  const sideEffectImportPattern = new RegExp(
+    `(^|\\n)[\\t ]*import\\s+["']${escapedPath}["'];?[\\t ]*(?=\\n|$)`,
+    "gu",
+  );
+
+  return content.replace(sideEffectImportPattern, "$1");
+}
+
+function removeSideEffectRequire(content: string, importPath: string): string {
+  const escapedPath = escapeRegExp(importPath);
+  const sideEffectRequirePattern = new RegExp(
+    `(^|\\n)([\\t ]*)require\\(\\s*["']${escapedPath}["']\\s*\\);?[\\t ]*(?=\\n|$)`,
+    "gu",
+  );
+
+  return content.replace(sideEffectRequirePattern, "$1");
+}
+
 function ensureModuleImportAlias(
   content: string,
   importPath: string,
@@ -229,7 +249,10 @@ function ensureModuleImportAlias(
   );
   const aliasMatch = content.match(importAliasPattern);
   if (aliasMatch?.[1]) {
-    return { content, alias: aliasMatch[1] };
+    return {
+      content: removeSideEffectImport(content, importPath),
+      alias: aliasMatch[1],
+    };
   }
 
   const requireAliasPattern = new RegExp(
@@ -238,7 +261,10 @@ function ensureModuleImportAlias(
   );
   const requireAliasMatch = content.match(requireAliasPattern);
   if (requireAliasMatch?.[1]) {
-    return { content, alias: requireAliasMatch[1] };
+    return {
+      content: removeSideEffectRequire(content, importPath),
+      alias: requireAliasMatch[1],
+    };
   }
 
   const sideEffectImportPattern = new RegExp(

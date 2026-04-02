@@ -55,4 +55,4 @@ Suggests CSS Modules migration for a component directory. Pass `--apply` to exec
 - Not a general-purpose AST auto-migration tool — only the common patterns above are rewritten.
 - Dynamic variable references and complex member expressions are left untouched.
 - Wrapper calls can still be rewritten when their nested arguments match supported class patterns.
-- Files already using React CSS Modules member expressions (`styles.xxx`) are skipped.
+- Existing CSS Modules imports are reused, and duplicate side-effect style imports are removed during migration.
