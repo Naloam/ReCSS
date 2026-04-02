@@ -3,6 +3,8 @@ import { dirname, extname, relative, resolve } from "node:path";
 
 import { parse as parseBabel, parseExpression } from "@babel/parser";
 import { parse as parseVueSfc } from "@vue/compiler-sfc";
+import * as cssTree from "css-tree";
+import scss from "postcss-scss";
 
 import { shouldSkipGeneratedDirectory } from "../generated-dirs.js";
 import type { MigrationSuggestion } from "../types.js";
@@ -50,6 +52,11 @@ function isModuleStyleFile(path: string): boolean {
   return path.endsWith(".module.css") || path.endsWith(".module.scss");
 }
 
+type StyleRuleLike = {
+  parent?: unknown;
+  selector: string;
+};
+
 export async function collectStyleFiles(directory: string): Promise<string[]> {
   const queue: string[] = [directory];
   const files: string[] = [];
@@ -86,18 +93,79 @@ export async function collectStyleFiles(directory: string): Promise<string[]> {
   return files;
 }
 
-export function extractClassNames(css: string): string[] {
-  const matches = css.matchAll(/\.(?<name>[A-Za-z_][A-Za-z0-9_-]*)/g);
-  const classSet = new Set<string>();
+function splitSelectors(selector: string): string[] {
+  return selector
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
 
-  for (const match of matches) {
-    const className = match.groups?.name;
-    if (className) {
-      classSet.add(className);
+function resolveStyleSelectors(rule: StyleRuleLike): string[] {
+  const currentSelectors = splitSelectors(rule.selector);
+  const parent = rule.parent;
+
+  if (!parent || typeof parent !== "object") {
+    return currentSelectors;
+  }
+
+  const parentRule = parent as StyleRuleLike & {
+    type?: string;
+  };
+  if (parentRule.type !== "rule" || typeof parentRule.selector !== "string") {
+    return currentSelectors;
+  }
+
+  const parentSelectors = resolveStyleSelectors({
+    parent: parentRule.parent,
+    selector: parentRule.selector,
+  });
+
+  const resolved: string[] = [];
+  for (const parentSelector of parentSelectors) {
+    for (const currentSelector of currentSelectors) {
+      if (currentSelector.includes("&")) {
+        resolved.push(currentSelector.replaceAll("&", parentSelector));
+      } else {
+        resolved.push(`${parentSelector} ${currentSelector}`);
+      }
     }
   }
 
-  return [...classSet].sort();
+  return resolved;
+}
+
+function extractSelectorClassNames(selector: string): string[] {
+  try {
+    cssTree.parse(selector, { context: "selector" });
+  } catch {
+    return [];
+  }
+
+  const matches = selector.match(/\.([_a-zA-Z]+[_a-zA-Z0-9-]*)/gu);
+  if (!matches) {
+    return [];
+  }
+
+  return [...new Set(matches.map((match) => match.slice(1)))];
+}
+
+export function extractClassNames(css: string): string[] {
+  try {
+    const root = scss.parse(css);
+    const classSet = new Set<string>();
+
+    root.walkRules((rule) => {
+      for (const selector of resolveStyleSelectors(rule)) {
+        for (const className of extractSelectorClassNames(selector)) {
+          classSet.add(className);
+        }
+      }
+    });
+
+    return [...classSet].sort();
+  } catch {
+    return [];
+  }
 }
 
 export async function buildMigrationSuggestions(
