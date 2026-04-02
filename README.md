@@ -61,6 +61,7 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 - Dynamic variable references (e.g., `className={someVar}`) and complex member expressions are still left untouched.
 - Wrapper calls can be rewritten when their nested arguments are supported class expressions.
 - Existing CSS Modules imports are reused, and duplicate side-effect style imports are removed during migration.
+- Ambiguous class names coming from multiple imported style modules are left untouched instead of being guessed.
 - Spread operators and deeply nested expressions may not be fully rewritten.
 - Only `.css` and `.scss` source files are processed.
 

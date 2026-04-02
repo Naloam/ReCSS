@@ -56,3 +56,4 @@ Suggests CSS Modules migration for a component directory. Pass `--apply` to exec
 - Dynamic variable references and complex member expressions are left untouched.
 - Wrapper calls can still be rewritten when their nested arguments match supported class patterns.
 - Existing CSS Modules imports are reused, and duplicate side-effect style imports are removed during migration.
+- Ambiguous class names coming from multiple imported style modules are left untouched instead of being guessed.
