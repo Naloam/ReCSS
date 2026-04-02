@@ -1,7 +1,7 @@
 # ReCSS Project Plan
 
-Version: v1.4  
-Status: Phase 2 delivered, initial Phase 3 ecosystem baseline delivered
+Version: v1.5  
+Status: Phase 2 delivered, Phase 3 ecosystem baseline delivered with initial VSCode quick fixes
 
 ## 1. Project Overview
 
@@ -26,7 +26,7 @@ Out of scope for current implementation:
 - CSS-in-JS (styled-components, emotion)
 - Less support
 - Deep CSS Modules migration automation
-- Advanced IDE quick-fix workflows
+- Deep IDE-assisted source-edit quick-fix workflows
 
 ### Users
 
@@ -55,7 +55,7 @@ Key libraries:
 Delivered or in progress in later phases:
 
 - Vite plugin: delivered
-- VSCode extension MVP: delivered
+- VSCode extension MVP + diagnostic quick actions: delivered
 
 ## 3. Features and Boundaries
 
@@ -76,6 +76,12 @@ Delivered or in progress in later phases:
 
 - Component-scoped suggestion and apply flow is delivered
 - Deeper syntax rewrites remain in the future backlog
+
+### F4: VSCode Diagnostics and Actions
+
+- Inline unused-class diagnostics are delivered
+- Refresh and clear diagnostic quick actions are delivered
+- Source-editing quick fixes remain in the future backlog
 
 ## 4. CLI Design
 
@@ -111,7 +117,7 @@ recss migrate <component-dir>
 ### Future Backlog
 
 - Richer CSS Modules rewrite coverage
-- VSCode quick fixes and code actions
+- Deeper VSCode source-editing quick fixes and code actions
 - Reporter formats beyond console/json
 
 ## 6. Acceptance Criteria
@@ -136,6 +142,8 @@ Delivered commands:
 - `recss check`
 - `recss init`
 - `recss migrate`
+- `ReCSS: Refresh Analysis`
+- `ReCSS: Clear Diagnostics`
 
 Delivered analysis modules:
 
