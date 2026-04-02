@@ -17,13 +17,18 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:recss.refreshAnalysis"
+    "onCommand:recss.refreshAnalysis",
+    "onCommand:recss.clearDiagnostics"
   ],
   "contributes": {
     "commands": [
       {
         "command": "recss.refreshAnalysis",
         "title": "ReCSS: Refresh Analysis"
+      },
+      {
+        "command": "recss.clearDiagnostics",
+        "title": "ReCSS: Clear Diagnostics"
       }
     ],
     "configuration": {
