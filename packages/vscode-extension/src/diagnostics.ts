@@ -5,11 +5,13 @@ import type { AnalysisResult, ClassDefinition } from "@recss/core";
 export const RECSS_DIAGNOSTIC_CODE = "unused-class";
 
 export type DiagnosticRecord = {
+  className: string;
   code: typeof RECSS_DIAGNOSTIC_CODE;
   endColumn: number;
   file: string;
   line: number;
   message: string;
+  selector: string;
   source: "recss";
   startColumn: number;
 };
@@ -76,12 +78,14 @@ export async function createDiagnosticRecords(
     const records = diagnosticsByFile.get(item.definition.file) ?? [];
 
     records.push({
+      className: item.className,
       code: RECSS_DIAGNOSTIC_CODE,
       file: item.definition.file,
       line: range.line,
       startColumn: range.startColumn,
       endColumn: range.endColumn,
       message: buildDiagnosticMessage(item.className),
+      selector: item.definition.selector,
       source: "recss",
     });
 
