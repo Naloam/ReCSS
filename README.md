@@ -25,9 +25,45 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 - Provide `@recss/vite-plugin` for HMR-time warnings
 - Provide `@recss/vscode-extension` for inline unused-class diagnostics
 
+### `recss migrate --apply` support scope
+
+`recss migrate --apply` copies plain CSS/SCSS files to `.module` equivalents and rewrites class references in source files. The current rewrite coverage:
+
+**React className patterns:**
+
+| Pattern                          | Example                                                            |
+| -------------------------------- | ------------------------------------------------------------------ |
+| String literal                   | `className="card active"`                                          |
+| Template literal                 | ``className={`btn ${active ? 'active' : ''}`}``                    |
+| clsx / cn / classnames call      | `className={clsx('btn', { active })}`                              |
+| Array literal                    | `className={["card", active && "active"]}`                         |
+| `.filter(Boolean).join(" ")`     | `className={["card", cond && "active"].filter(Boolean).join(" ")}` |
+| `.concat()` chain                | `className={["card"].concat(cond ? ["active"] : [])}`              |
+| Binary string concatenation      | `className={"card " + (active ? "active" : "")}`                   |
+| Conditional / logical expression | `className={active ? "on" : "off"}`                                |
+
+**Vue SFC patterns:**
+
+| Pattern                   | Example                                    |
+| ------------------------- | ------------------------------------------ |
+| Static `class` attribute  | `<div class="card">`                       |
+| Object `:class` binding   | `:class="{ active: isActive }"`            |
+| Array `:class` binding    | `:class="['foo', cond ? 'bar' : '']"`      |
+| Mixed static + dynamic    | `<div class="card" :class="{ active }">`   |
+| Custom style module alias | `<style module="classes">` uses `$classes` |
+
+**Limitations:**
+
+- This is **not** a general-purpose AST auto-migration tool. It covers the most common className patterns listed above.
+- Dynamic variable references (e.g., `className={someVar}`), function calls, and complex member expressions are detected as uncertain and left untouched.
+- Files that already use CSS Modules (`styles.xxx`) are skipped.
+- Vue files using `useCssModule()` are skipped.
+- Spread operators and deeply nested expressions may not be fully rewritten.
+- Only `.css` and `.scss` source files are processed.
+
 Deferred:
 
-- Deeper CSS Modules auto-rewrite coverage
+- Deeper CSS Modules auto-rewrite coverage beyond the patterns above
 - Advanced VSCode extension interactions and quick fixes
 
 ## Workspace
