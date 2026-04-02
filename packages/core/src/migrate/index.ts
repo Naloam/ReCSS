@@ -37,6 +37,14 @@ type RewriteResult = {
   code: string;
 };
 
+type ReactExpressionKind =
+  | "array"
+  | "call"
+  | "member"
+  | "other"
+  | "string"
+  | "template";
+
 function isModuleStyleFile(path: string): boolean {
   return path.endsWith(".module.css") || path.endsWith(".module.scss");
 }
@@ -317,6 +325,24 @@ function preserveReactNode(
     changed: false,
     code: getReactNodeSource(source, node),
   };
+}
+
+function getReactExpressionKind(expression: ReactAstNode): ReactExpressionKind {
+  switch (expression.type) {
+    case "ArrayExpression":
+      return "array";
+    case "CallExpression":
+      return "call";
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+      return "member";
+    case "StringLiteral":
+      return "string";
+    case "TemplateLiteral":
+      return "template";
+    default:
+      return "other";
+  }
 }
 
 function walkReactAst(
@@ -716,27 +742,118 @@ function rewriteReactExpression(
     }
     case "CallExpression": {
       const callee = expression.callee as ReactAstNode | undefined;
-      if (
-        callee?.type !== "Identifier" ||
-        typeof callee.name !== "string" ||
-        !classHelpers.has(callee.name)
-      ) {
-        return preserveReactNode(source, expression);
-      }
-
       const args = Array.isArray(expression.arguments)
         ? (expression.arguments as ReactAstNode[])
         : [];
-      const rewrittenArgs = args.map((arg) =>
-        rewriteReactExpression(source, arg, classToExpr, classHelpers),
-      );
-      if (!rewrittenArgs.some((result) => result.changed)) {
+
+      if (
+        callee?.type === "Identifier" &&
+        typeof callee.name === "string" &&
+        classHelpers.has(callee.name)
+      ) {
+        const rewrittenArgs = args.map((arg) =>
+          rewriteReactExpression(source, arg, classToExpr, classHelpers),
+        );
+        if (!rewrittenArgs.some((result) => result.changed)) {
+          return preserveReactNode(source, expression);
+        }
+
+        return {
+          changed: true,
+          code: `${getReactNodeSource(source, callee)}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
+        };
+      }
+
+      if (
+        callee?.type === "MemberExpression" ||
+        callee?.type === "OptionalMemberExpression"
+      ) {
+        const objectNode = callee.object as ReactAstNode | undefined;
+        const propertyNode = callee.property as ReactAstNode | undefined;
+        if (!objectNode || !propertyNode) {
+          return preserveReactNode(source, expression);
+        }
+
+        const rewrittenObject = rewriteReactExpression(
+          source,
+          objectNode,
+          classToExpr,
+          classHelpers,
+        );
+        const rewrittenArgs = args.map((arg) =>
+          rewriteReactExpression(source, arg, classToExpr, classHelpers),
+        );
+        let changed =
+          rewrittenObject.changed ||
+          rewrittenArgs.some((result) => result.changed);
+        let propertyCode = getReactNodeSource(source, propertyNode);
+
+        if (Boolean(callee.computed)) {
+          const rewrittenProperty = rewriteReactExpression(
+            source,
+            propertyNode,
+            classToExpr,
+            classHelpers,
+          );
+          propertyCode = rewrittenProperty.code;
+          changed ||= rewrittenProperty.changed;
+        }
+
+        if (!changed) {
+          return preserveReactNode(source, expression);
+        }
+
+        const accessor = Boolean(callee.computed)
+          ? `[${propertyCode}]`
+          : `${Boolean(callee.optional) ? "?." : "."}${propertyCode}`;
+
+        return {
+          changed: true,
+          code: `${rewrittenObject.code}${accessor}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
+        };
+      }
+
+      return preserveReactNode(source, expression);
+    }
+    case "MemberExpression":
+    case "OptionalMemberExpression": {
+      const objectNode = expression.object as ReactAstNode | undefined;
+      const propertyNode = expression.property as ReactAstNode | undefined;
+      if (!objectNode || !propertyNode) {
         return preserveReactNode(source, expression);
       }
 
+      const rewrittenObject = rewriteReactExpression(
+        source,
+        objectNode,
+        classToExpr,
+        classHelpers,
+      );
+      let changed = rewrittenObject.changed;
+      let propertyCode = getReactNodeSource(source, propertyNode);
+
+      if (Boolean(expression.computed)) {
+        const rewrittenProperty = rewriteReactExpression(
+          source,
+          propertyNode,
+          classToExpr,
+          classHelpers,
+        );
+        propertyCode = rewrittenProperty.code;
+        changed ||= rewrittenProperty.changed;
+      }
+
+      if (!changed) {
+        return preserveReactNode(source, expression);
+      }
+
+      const accessor = Boolean(expression.computed)
+        ? `[${propertyCode}]`
+        : `${Boolean(expression.optional) ? "?." : "."}${propertyCode}`;
+
       return {
         changed: true,
-        code: `${getReactNodeSource(source, callee)}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
+        code: `${rewrittenObject.code}${accessor}`,
       };
     }
     case "ParenthesizedExpression": {
@@ -811,10 +928,16 @@ function buildClassNameReplacement(
     return undefined;
   }
 
+  const expressionKind = getReactExpressionKind(expression);
+  const formattedCode =
+    expressionKind === "array"
+      ? `${rewritten.code}.filter(Boolean).join(" ")`
+      : rewritten.code;
+
   return {
     start: valueNode.start,
     end: valueNode.end,
-    value: `{${rewritten.code}}`,
+    value: `{${formattedCode}}`,
   };
 }
 

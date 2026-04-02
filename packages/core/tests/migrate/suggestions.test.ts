@@ -160,6 +160,80 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should rewrite array filter join className chains", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "recss-core-migrate-join-"));
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import "./card.scss";',
+          "export const Card = ({ active }: { active: boolean }) =>",
+          '  <div className={["card", active && "active"].filter(Boolean).join(" ")} />;',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'className={[styles.card, active && styles.active].filter(Boolean).join(" ")}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("should normalize direct array className expressions into strings", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "recss-core-migrate-array-"));
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import "./card.scss";',
+          "export const Card = ({ active }: { active: boolean }) =>",
+          '  <div className={["card", active && "active"]} />;',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'className={[styles.card, active && styles.active].filter(Boolean).join(" ")}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should rewrite vue template classes when module style src is present", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "recss-core-migrate-vue-"));
 
