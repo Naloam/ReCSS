@@ -28,6 +28,17 @@ const mockModules = vi.hoisted(() => {
         removed?: readonly MockWorkspaceFolder[];
       }) => unknown)
     | undefined;
+  let codeActionProvider:
+    | {
+        provideCodeActions: (
+          document: { uri: MockUri },
+          range: Range,
+          context: {
+            diagnostics: readonly Diagnostic[];
+          },
+        ) => unknown;
+      }
+    | undefined;
 
   const registeredCommands = new Map<string, (...args: unknown[]) => unknown>();
   const diagnosticCollection = {
@@ -59,6 +70,25 @@ const mockModules = vi.hoisted(() => {
       public readonly range: Range,
       public readonly message: string,
       public readonly severity = 1,
+    ) {}
+  }
+
+  class CodeActionKind {
+    static readonly QuickFix = new CodeActionKind("quickfix");
+
+    constructor(public readonly value: string) {}
+  }
+
+  class CodeAction {
+    command?: {
+      command: string;
+      title: string;
+    };
+    diagnostics?: Diagnostic[];
+
+    constructor(
+      public readonly title: string,
+      public readonly kind?: CodeActionKind,
     ) {}
   }
 
@@ -95,6 +125,17 @@ const mockModules = vi.hoisted(() => {
       }): void {
         workspaceFoldersListener?.(event);
       },
+      getCodeActions(diagnostics: readonly Diagnostic[]): CodeAction[] {
+        if (!codeActionProvider) {
+          throw new Error("Missing code action provider");
+        }
+
+        return (codeActionProvider.provideCodeActions(
+          { uri: createUri("/workspace/app-a/src/styles/card.scss") },
+          new Range(0, 0, 0, 5),
+          { diagnostics },
+        ) ?? []) as CodeAction[];
+      },
       getOutputLines(): string[] {
         return outputChannel.appendLine.mock.calls.map(([value]) => value);
       },
@@ -105,6 +146,7 @@ const mockModules = vi.hoisted(() => {
         saveListener = undefined;
         configurationListener = undefined;
         workspaceFoldersListener = undefined;
+        codeActionProvider = undefined;
         registeredCommands.clear();
         diagnosticCollection.clear.mockClear();
         diagnosticCollection.delete.mockClear();
@@ -144,12 +186,33 @@ const mockModules = vi.hoisted(() => {
           },
         ),
       },
+      CodeAction,
+      CodeActionKind,
       Diagnostic,
       DiagnosticSeverity: {
         Warning: 1,
       },
       languages: {
         createDiagnosticCollection: vi.fn(() => diagnosticCollection),
+        registerCodeActionsProvider: vi.fn(
+          (
+            _selector: unknown,
+            provider: {
+              provideCodeActions: (
+                document: { uri: MockUri },
+                range: Range,
+                context: {
+                  diagnostics: readonly Diagnostic[];
+                },
+              ) => unknown;
+            },
+          ) => {
+            codeActionProvider = provider;
+            return {
+              dispose: vi.fn(),
+            };
+          },
+        ),
       },
       Range,
       Uri: {
@@ -214,6 +277,7 @@ vi.mock("@recss/core", () => ({
 }));
 
 vi.mock("../src/diagnostics.js", () => ({
+  RECSS_DIAGNOSTIC_CODE: "unused-class",
   createDiagnosticRecords: mockModules.diagnostics.createDiagnosticRecords,
 }));
 
@@ -311,6 +375,36 @@ describe("activate", () => {
     expect(mockModules.state.getOutputLines().at(-1)).toBe(
       "[recss] Cleared all diagnostics.",
     );
+  });
+
+  it("should provide quick fixes for recss diagnostics", async () => {
+    mockModules.state.setWorkspaceFolders([
+      mockModules.state.workspaceFolder("app-a", "/workspace/app-a"),
+    ]);
+
+    const { activate } = await import("../src/extension.js");
+    activate({
+      subscriptions: [],
+    });
+
+    const diagnostic = new mockModules.vscode.Diagnostic(
+      new mockModules.vscode.Range(0, 0, 0, 5),
+      'Unused CSS class ".card" is not referenced.',
+      mockModules.vscode.DiagnosticSeverity.Warning,
+    );
+    diagnostic.code = "unused-class";
+    diagnostic.source = "recss";
+
+    const actions = mockModules.state.getCodeActions([diagnostic]);
+
+    expect(actions.map((action) => action.title)).toEqual([
+      "ReCSS: Refresh Analysis",
+      "ReCSS: Clear Diagnostics",
+    ]);
+    expect(actions.map((action) => action.command?.command)).toEqual([
+      "recss.refreshAnalysis",
+      "recss.clearDiagnostics",
+    ]);
   });
 });
 
