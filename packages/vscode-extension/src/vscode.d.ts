@@ -19,6 +19,7 @@ declare module "vscode" {
   }
 
   export class Range {
+    constructor(start: Position, end: Position);
     constructor(
       startLine: number,
       startCharacter: number,
@@ -39,6 +40,7 @@ declare module "vscode" {
   export class Diagnostic {
     constructor(range: Range, message: string, severity?: DiagnosticSeverity);
     code?: string | number;
+    data?: unknown;
     source?: string;
     readonly message: string;
     readonly range: Range;
@@ -62,6 +64,13 @@ declare module "vscode" {
   }
 
   export interface TextDocument {
+    getText(): string;
+    lineAt(line: number): {
+      range: Range;
+      text: string;
+    };
+    offsetAt(position: Position): number;
+    positionAt(offset: number): Position;
     uri: Uri;
   }
 
@@ -97,8 +106,13 @@ declare module "vscode" {
     constructor(title: string, kind?: CodeActionKind);
     command?: Command;
     diagnostics?: Diagnostic[];
+    edit?: WorkspaceEdit;
     readonly kind?: CodeActionKind;
     readonly title: string;
+  }
+
+  export class WorkspaceEdit {
+    delete(uri: Uri, range: Range): void;
   }
 
   export interface CodeActionContext {

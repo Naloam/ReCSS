@@ -159,8 +159,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerCodeActionsProvider(
       FILE_CODE_ACTION_SELECTOR,
       {
-        provideCodeActions(_document, _range, context) {
-          return createDiagnosticCodeActions(context);
+        provideCodeActions(document, _range, context) {
+          return createDiagnosticCodeActions(document, context);
         },
       },
       {
@@ -270,6 +270,10 @@ async function refreshWorkspaceFolder(
         );
 
         diagnostic.code = record.code;
+        diagnostic.data = {
+          className: record.className,
+          selector: record.selector,
+        };
         diagnostic.source = record.source;
         return diagnostic;
       }),
