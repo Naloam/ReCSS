@@ -176,6 +176,22 @@ function collectReactImportBindings(
   }
 }
 
+function collectRequireClassHelper(
+  variableDeclarator: AstNode,
+  helpers: Set<string>,
+): void {
+  const id = variableDeclarator.id as AstNode | undefined;
+  const init = variableDeclarator.init as AstNode | undefined;
+  if (!id || !init || id.type !== "Identifier") {
+    return;
+  }
+
+  const requireSource = getRequireCallSource(init);
+  if (requireSource === "clsx" || requireSource === "classnames") {
+    helpers.add(id.name ?? "");
+  }
+}
+
 function getRequireCallSource(node: AstNode | undefined): string | undefined {
   if (!node || node.type !== "CallExpression") {
     return undefined;
@@ -193,6 +209,45 @@ function getRequireCallSource(node: AstNode | undefined): string | undefined {
   }
 
   return args[0].value;
+}
+
+function collectClassHelperAliases(
+  variableDeclarator: AstNode,
+  helpers: Set<string>,
+): void {
+  const id = variableDeclarator.id as AstNode | undefined;
+  const init = variableDeclarator.init as AstNode | undefined;
+  if (
+    !id ||
+    !init ||
+    id.type !== "Identifier" ||
+    typeof id.name !== "string"
+  ) {
+    return;
+  }
+
+  if (init.type === "Identifier" && helpers.has(init.name ?? "")) {
+    helpers.add(id.name);
+    return;
+  }
+
+  if (init.type !== "CallExpression") {
+    return;
+  }
+
+  const callee = init.callee as AstNode | undefined;
+  if (!callee || callee.type !== "MemberExpression") {
+    return;
+  }
+
+  const objectNode = callee.object as AstNode | undefined;
+  if (
+    objectNode?.type === "Identifier" &&
+    helpers.has(objectNode.name ?? "") &&
+    getMemberPropertyName(callee) === "bind"
+  ) {
+    helpers.add(id.name);
+  }
 }
 
 function getObjectPatternBindingName(property: AstNode): string | undefined {
@@ -800,6 +855,8 @@ export function parseJsxCode(
       }
 
       if (node.type === "VariableDeclarator") {
+        collectRequireClassHelper(node, classHelpers);
+        collectClassHelperAliases(node, classHelpers);
         collectReactRequireBindings(node, reactNamespaces, reactFactories);
         collectReactAliasBindings(node, reactNamespaces, reactFactories);
       }

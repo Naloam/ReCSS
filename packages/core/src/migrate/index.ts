@@ -615,6 +615,46 @@ function collectRequireClassHelper(
   }
 }
 
+function collectClassHelperAliases(
+  variableDeclarator: ReactAstNode,
+  bindings: ReactModuleBindings,
+): void {
+  const id = variableDeclarator.id as ReactAstNode | undefined;
+  const init = variableDeclarator.init as ReactAstNode | undefined;
+  if (
+    !id ||
+    !init ||
+    id.type !== "Identifier" ||
+    typeof id.name !== "string"
+  ) {
+    return;
+  }
+
+  if (init.type === "Identifier" && bindings.classHelpers.has(init.name ?? "")) {
+    bindings.classHelpers.add(id.name);
+    return;
+  }
+
+  if (init.type !== "CallExpression") {
+    return;
+  }
+
+  const callee = init.callee as ReactAstNode | undefined;
+  if (!isReactMemberExpression(callee)) {
+    return;
+  }
+
+  const objectNode = callee.object as ReactAstNode | undefined;
+  const propertyName = getStaticPropertyKey(callee.property as ReactAstNode);
+  if (
+    objectNode?.type === "Identifier" &&
+    bindings.classHelpers.has(objectNode.name ?? "") &&
+    propertyName === "bind"
+  ) {
+    bindings.classHelpers.add(id.name);
+  }
+}
+
 function collectRequireReactBindings(
   variableDeclarator: ReactAstNode,
   bindings: ReactModuleBindings,
@@ -744,6 +784,7 @@ function collectReactModuleBindings(source: string): ReactModuleBindings {
 
       if (node.type === "VariableDeclarator") {
         collectRequireClassHelper(node, bindings);
+        collectClassHelperAliases(node, bindings);
         collectRequireReactBindings(node, bindings);
         collectReactAliasBindings(node, bindings);
       }

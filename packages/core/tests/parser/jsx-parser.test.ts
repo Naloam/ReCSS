@@ -39,6 +39,22 @@ describe("parseJsxCode", () => {
     expect(result.used.has("extra")).toBe(true);
   });
 
+  it("should extract classes from bound class helper aliases", () => {
+    const result = parseJsxCode(
+      "/virtual/App.tsx",
+      [
+        `import clsx from "clsx";`,
+        `export function App(active: boolean){`,
+        `  const cx = clsx.bind(null);`,
+        `  return <div className={cx("card", active && "card-title")} />;`,
+        `}`,
+      ].join("\n"),
+    );
+
+    expect(result.used.has("card")).toBe(true);
+    expect(result.used.has("card-title")).toBe(true);
+  });
+
   it("should extract classes from dom class apis", () => {
     const result = parseJsxCode(
       "/virtual/App.tsx",

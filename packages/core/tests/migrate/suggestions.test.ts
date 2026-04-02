@@ -645,6 +645,50 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should rewrite bound react helper aliases", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-bound-helper-alias-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import clsx from "clsx";',
+          'import "./card.scss";',
+          "",
+          "export function Card(active: boolean) {",
+          "  const cx = clsx.bind(null);",
+          '  return <div className={cx("card", active && "active")} />;',
+          "}",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain("const cx = clsx.bind(null);");
+      expect(rewritten).toContain(
+        'className={cx(styles.card, active && styles.active)}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should leave ambiguous react class names untouched across multiple module imports", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-react-ambiguous-"),
