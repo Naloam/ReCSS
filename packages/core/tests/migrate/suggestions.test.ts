@@ -795,6 +795,47 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should rewrite nested react wrapper calls around supported class expressions", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-react-wrapper-call-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }\n.card-title { color: green; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import clsx from "clsx";',
+          'import "./card.scss";',
+          "const mergeClasses = (...values: string[]) => values.join(\" \");",
+          "export const Card = ({ active }: { active: boolean }) =>",
+          '  <div className={mergeClasses(clsx("card", active && "active"), active ? "card-title" : "")} />;',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'className={mergeClasses(clsx(styles.card, active && styles.active), active ? styles["card-title"] : "")}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should use script setup useCssModule accessor for default vue module rewrites", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-vue-use-css-module-"),
@@ -888,6 +929,54 @@ describe("migrate helpers", () => {
         `<section :class="[styles.card, { [styles.active]: isActive }]" />`,
       );
       expect(rewritten).not.toContain("$classes.card");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("should rewrite nested vue wrapper calls around supported class expressions", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-vue-wrapper-call-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }\n.card-body { color: green; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.vue"),
+        [
+          "<template>",
+          `  <section :class="mergeClasses(['card', isActive && 'active'], isActive ? 'card-body' : '')" />`,
+          "</template>",
+          "",
+          '<script setup lang="ts">',
+          "const mergeClasses = (...values: unknown[]) => values;",
+          "const isActive = true;",
+          "</script>",
+          "",
+          '<style src="./card.scss"></style>',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.vue"),
+        "utf8",
+      );
+      expect(rewritten).toContain(
+        '<style module src="./card.module.scss"></style>',
+      );
+      expect(rewritten).toContain(
+        `<section :class="mergeClasses([$style.card, isActive && $style.active], isActive ? $style[&quot;card-body&quot;] : '')" />`,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }

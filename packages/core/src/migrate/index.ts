@@ -1039,6 +1039,9 @@ function rewriteReactExpression(
       const args = Array.isArray(expression.arguments)
         ? (expression.arguments as ReactAstNode[])
         : [];
+      if (!callee) {
+        return preserveReactNode(source, expression);
+      }
 
       if (
         callee?.type === "Identifier" &&
@@ -1052,9 +1055,18 @@ function rewriteReactExpression(
           return preserveReactNode(source, expression);
         }
 
+        const rewrittenCall = rewriteCallExpressionArguments(
+          source,
+          expression,
+          args,
+          rewrittenArgs,
+        );
+
         return {
           changed: true,
-          code: `${getReactNodeSource(source, callee)}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
+          code:
+            rewrittenCall ??
+            `${getReactNodeSource(source, callee)}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
         };
       }
 
@@ -1113,7 +1125,26 @@ function rewriteReactExpression(
         };
       }
 
-      return preserveReactNode(source, expression);
+      const rewrittenArgs = args.map((arg) =>
+        rewriteReactExpression(source, arg, classToExpr, classHelpers, false),
+      );
+      if (!rewrittenArgs.some((result) => result.changed)) {
+        return preserveReactNode(source, expression);
+      }
+
+      const rewrittenCall = rewriteCallExpressionArguments(
+        source,
+        expression,
+        args,
+        rewrittenArgs,
+      );
+
+      return {
+        changed: true,
+        code:
+          rewrittenCall ??
+          `${getReactNodeSource(source, callee)}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
+      };
     }
     case "MemberExpression":
     case "OptionalMemberExpression": {
@@ -1247,6 +1278,65 @@ function applyReplacements(content: string, replacements: Replacement[]): string
         `${current.slice(0, replacement.start)}${replacement.value}${current.slice(replacement.end)}`,
       content,
     );
+}
+
+function applyReplacementSlice(
+  source: string,
+  start: number,
+  end: number,
+  replacements: Replacement[],
+): string {
+  const relativeReplacements = replacements.map((replacement) => ({
+    start: replacement.start - start,
+    end: replacement.end - start,
+    value: replacement.value,
+  }));
+
+  return applyReplacements(source.slice(start, end), relativeReplacements);
+}
+
+function rewriteCallExpressionArguments(
+  source: string,
+  expression: ReactAstNode,
+  args: ReactAstNode[],
+  rewrittenArgs: RewriteResult[],
+): string | undefined {
+  if (
+    typeof expression.start !== "number" ||
+    typeof expression.end !== "number" ||
+    args.length !== rewrittenArgs.length
+  ) {
+    return undefined;
+  }
+
+  const replacements: Replacement[] = [];
+
+  for (const [index, arg] of args.entries()) {
+    if (!rewrittenArgs[index]?.changed) {
+      continue;
+    }
+
+    if (typeof arg.start !== "number" || typeof arg.end !== "number") {
+      return undefined;
+    }
+
+    replacements.push({
+      start: arg.start,
+      end: arg.end,
+      value: rewrittenArgs[index].code,
+    });
+  }
+
+  if (replacements.length === 0) {
+    return undefined;
+  }
+
+  return applyReplacementSlice(
+    source,
+    expression.start,
+    expression.end,
+    replacements,
+  );
 }
 
 function rewriteReactClassNames(

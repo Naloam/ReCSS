@@ -41,6 +41,7 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 | `.concat()` chain                | `className={["card"].concat(cond ? ["active"] : [])}`              |
 | Binary string concatenation      | `className={"card " + (active ? "active" : "")}`                   |
 | Conditional / logical expression | `className={active ? "on" : "off"}`                                |
+| Wrapper function calls           | `className={mergeClasses(clsx("card"), active ? "active" : "")}`   |
 
 **Vue SFC patterns:**
 
@@ -52,11 +53,13 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 | Mixed static + dynamic    | `<div class="card" :class="{ active }">`   |
 | Custom style module alias | `<style module="classes">` uses `$classes` |
 | `useCssModule()` accessors | `<script setup>const styles = useCssModule()</script>` |
+| Wrapper function calls    | `:class="mergeClasses(['card'], isActive && 'active')"` |
 
 **Limitations:**
 
 - This is **not** a general-purpose AST auto-migration tool. It covers the most common className patterns listed above.
-- Dynamic variable references (e.g., `className={someVar}`), function calls, and complex member expressions are detected as uncertain and left untouched.
+- Dynamic variable references (e.g., `className={someVar}`) and complex member expressions are still left untouched.
+- Wrapper calls can be rewritten when their nested arguments are supported class expressions.
 - Files that already use CSS Modules (`styles.xxx`) are skipped.
 - Spread operators and deeply nested expressions may not be fully rewritten.
 - Only `.css` and `.scss` source files are processed.
