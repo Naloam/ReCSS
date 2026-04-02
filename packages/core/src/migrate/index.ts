@@ -446,6 +446,23 @@ function rewriteTemplateText(
   };
 }
 
+function flattenReactBinaryExpression(node: ReactAstNode): ReactAstNode[] {
+  if (node.type !== "BinaryExpression" || node.operator !== "+") {
+    return [node];
+  }
+
+  const left = node.left as ReactAstNode | undefined;
+  const right = node.right as ReactAstNode | undefined;
+  if (!left || !right) {
+    return [node];
+  }
+
+  return [
+    ...flattenReactBinaryExpression(left),
+    ...flattenReactBinaryExpression(right),
+  ];
+}
+
 function getStaticPropertyKey(node: ReactAstNode): string | undefined {
   if (node.type === "Identifier" && typeof node.name === "string") {
     return node.name;
@@ -703,6 +720,40 @@ function rewriteReactExpression(
         changed: true,
         code: `${getReactNodeSource(source, test)} ? ${rewrittenConsequent.code} : ${rewrittenAlternate.code}`,
       };
+    }
+    case "BinaryExpression": {
+      if (expression.operator !== "+") {
+        return preserveReactNode(source, expression);
+      }
+
+      const operands = flattenReactBinaryExpression(expression);
+      let changed = false;
+      let code = "`";
+
+      for (const operand of operands) {
+        if (
+          operand.type === "StringLiteral" &&
+          typeof operand.value === "string"
+        ) {
+          const rewrittenText = rewriteTemplateText(operand.value, classToExpr);
+          code += rewrittenText.code;
+          changed ||= rewrittenText.changed;
+          continue;
+        }
+
+        const rewrittenOperand = rewriteReactExpression(
+          source,
+          operand,
+          classToExpr,
+          classHelpers,
+        );
+        code += `\${${rewrittenOperand.code}}`;
+        changed ||= rewrittenOperand.changed;
+      }
+
+      code += "`";
+
+      return changed ? { changed: true, code } : preserveReactNode(source, expression);
     }
     case "LogicalExpression": {
       const left = expression.left as ReactAstNode | undefined;
