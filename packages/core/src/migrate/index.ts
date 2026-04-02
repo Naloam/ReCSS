@@ -1375,7 +1375,7 @@ function rewriteVueBindingExpression(
       expression,
       ast,
       classToExpr,
-      new Set<string>(),
+      new Set(KNOWN_CLASS_HELPERS),
     );
   } catch {
     return {

@@ -654,4 +654,52 @@ describe("migrate helpers", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("should rewrite vue class helper calls when module style src is present", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-vue-clsx-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.vue"),
+        [
+          "<template>",
+          `  <section :class="clsx('card', isActive && 'active')" />`,
+          "</template>",
+          "",
+          '<script setup lang="ts">',
+          'import clsx from "clsx";',
+          "const isActive = true;",
+          "</script>",
+          "",
+          '<style src="./card.scss"></style>',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.vue"),
+        "utf8",
+      );
+      expect(rewritten).toContain(
+        '<style module src="./card.module.scss"></style>',
+      );
+      expect(rewritten).toContain(
+        `<section :class="clsx($style.card, isActive && $style.active)" />`,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
