@@ -209,12 +209,12 @@ function buildUnusedAlias(content: string): string {
   return alias;
 }
 
-function toVueStyleAccess(className: string): string {
+function toVueStyleAccess(moduleAccessor: string, className: string): string {
   if (/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(className)) {
-    return `$style.${className}`;
+    return `${moduleAccessor}.${className}`;
   }
 
-  return `$style["${className}"]`;
+  return `${moduleAccessor}["${className}"]`;
 }
 
 function ensureModuleImportAlias(
@@ -1151,6 +1151,28 @@ function hasVueModuleStyleBlock(content: string): boolean {
   );
 }
 
+function getVueModuleAccessor(
+  content: string,
+  importPath: string,
+): string | undefined {
+  const escapedImportPath = escapeRegExp(importPath);
+  const styleTagPattern = new RegExp(
+    `<style\\b[^>]*\\bmodule(?:\\s*=\\s*(["'])([^"']+)\\1)?[^>]*\\bsrc=(["'])${escapedImportPath}\\3[^>]*>`,
+    "u",
+  );
+  const match = content.match(styleTagPattern);
+  if (!match) {
+    return undefined;
+  }
+
+  const alias = match[2];
+  if (typeof alias === "string" && alias.length > 0) {
+    return `$${alias}`;
+  }
+
+  return "$style";
+}
+
 function rewriteVueBindingExpression(
   expression: string,
   classToExpr: Map<string, string>,
@@ -1328,9 +1350,14 @@ export async function applyMigrationSuggestions(
         extension === ".vue" &&
         hasQuotedPathReference(content, newImportPath)
       ) {
+        const moduleAccessor =
+          getVueModuleAccessor(content, newImportPath) ?? "$style";
         for (const className of suggestion.classNames) {
           if (!vueClassToExpr.has(className)) {
-            vueClassToExpr.set(className, toVueStyleAccess(className));
+            vueClassToExpr.set(
+              className,
+              toVueStyleAccess(moduleAccessor, className),
+            );
           }
         }
       }
