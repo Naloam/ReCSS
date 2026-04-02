@@ -304,6 +304,51 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should leave ambiguous react class names untouched across multiple module imports", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-react-ambiguous-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/base.scss"),
+        ".card { color: red; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/theme.scss"),
+        ".card { color: blue; }\n.accent { color: green; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import "./base.scss";',
+          'import "./theme.scss";',
+          'export const Card = () => <div className="card accent" />;',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./base.module.scss";');
+      expect(rewritten).toContain('import styles2 from "./theme.module.scss";');
+      expect(rewritten).toContain('className={["card", styles2.accent].join(" ")}');
+      expect(rewritten).not.toContain("styles.card");
+      expect(rewritten).not.toContain("styles2.card");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should rewrite react template literals with mapped classes", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-template-"),
@@ -881,6 +926,58 @@ describe("migrate helpers", () => {
       expect(rewritten).toContain(
         `<section :class="cx($style.card, isActive && $style.active)" />`,
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("should leave ambiguous vue class names untouched across multiple module accessors", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-vue-ambiguous-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/base.scss"),
+        ".card { color: red; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/theme.scss"),
+        ".card { color: blue; }\n.accent { color: green; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.vue"),
+        [
+          "<template>",
+          '  <section class="card accent" />',
+          "</template>",
+          "",
+          '<style src="./base.scss"></style>',
+          '<style module="theme" src="./theme.scss"></style>',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.vue"),
+        "utf8",
+      );
+      expect(rewritten).toContain(
+        '<style module src="./base.module.scss"></style>',
+      );
+      expect(rewritten).toContain(
+        '<style module="theme" src="./theme.module.scss"></style>',
+      );
+      expect(rewritten).toContain(`<section :class='["card", $theme.accent]' />`);
+      expect(rewritten).not.toContain("$style.card");
+      expect(rewritten).not.toContain("$theme.card");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
