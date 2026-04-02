@@ -7,6 +7,11 @@ import {
 } from "@recss/core";
 import * as vscode from "vscode";
 
+import {
+  CLEAR_DIAGNOSTICS_COMMAND,
+  createDiagnosticCodeActions,
+  REFRESH_ANALYSIS_COMMAND,
+} from "./code-actions.js";
 import { createDiagnosticRecords } from "./diagnostics.js";
 import {
   createRefreshRequest,
@@ -25,6 +30,9 @@ import {
 const DIAGNOSTIC_COLLECTION_NAME = "recss";
 const OUTPUT_CHANNEL_NAME = "ReCSS";
 const REFRESH_DEBOUNCE_MS = 150;
+const FILE_CODE_ACTION_SELECTOR = {
+  scheme: "file",
+};
 
 type FrameworkSetting = "config" | RecssFramework;
 
@@ -148,10 +156,21 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     diagnostics,
     output,
-    vscode.commands.registerCommand("recss.refreshAnalysis", () => {
+    vscode.languages.registerCodeActionsProvider(
+      FILE_CODE_ACTION_SELECTOR,
+      {
+        provideCodeActions(_document, _range, context) {
+          return createDiagnosticCodeActions(context);
+        },
+      },
+      {
+        providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
+      },
+    ),
+    vscode.commands.registerCommand(REFRESH_ANALYSIS_COMMAND, () => {
       scheduleRefresh(createRefreshRequest("manual-command"));
     }),
-    vscode.commands.registerCommand("recss.clearDiagnostics", () => {
+    vscode.commands.registerCommand(CLEAR_DIAGNOSTICS_COMMAND, () => {
       clearScheduledRefreshes();
       clearAllDiagnostics();
       output.appendLine(formatClearDiagnosticsMessage());

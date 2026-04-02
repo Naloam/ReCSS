@@ -82,8 +82,46 @@ declare module "vscode" {
     subscriptions: Disposable[];
   }
 
+  export interface Command {
+    command: string;
+    title: string;
+  }
+
+  export class CodeActionKind {
+    constructor(value: string);
+    static readonly QuickFix: CodeActionKind;
+    readonly value: string;
+  }
+
+  export class CodeAction {
+    constructor(title: string, kind?: CodeActionKind);
+    command?: Command;
+    diagnostics?: Diagnostic[];
+    readonly kind?: CodeActionKind;
+    readonly title: string;
+  }
+
+  export interface CodeActionContext {
+    diagnostics: readonly Diagnostic[];
+  }
+
+  export interface CodeActionProvider {
+    provideCodeActions(
+      document: TextDocument,
+      range: Range,
+      context: CodeActionContext,
+    ): CodeAction[] | Promise<CodeAction[]>;
+  }
+
   export namespace languages {
     function createDiagnosticCollection(name?: string): DiagnosticCollection;
+    function registerCodeActionsProvider(
+      selector: unknown,
+      provider: CodeActionProvider,
+      metadata?: {
+        providedCodeActionKinds?: readonly CodeActionKind[];
+      },
+    ): Disposable;
   }
 
   export namespace window {
