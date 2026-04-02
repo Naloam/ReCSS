@@ -433,6 +433,64 @@ function collectReactClassHelpers(
   }
 }
 
+function collectRequireClassHelper(
+  variableDeclarator: ReactAstNode,
+  helpers: Set<string>,
+): void {
+  const id = variableDeclarator.id as ReactAstNode | undefined;
+  const init = variableDeclarator.init as ReactAstNode | undefined;
+  if (!id || !init || id.type !== "Identifier") {
+    return;
+  }
+
+  if (init.type !== "CallExpression") {
+    return;
+  }
+
+  const callee = init.callee as ReactAstNode | undefined;
+  const args = Array.isArray(init.arguments)
+    ? (init.arguments as ReactAstNode[])
+    : [];
+  if (
+    callee?.type !== "Identifier" ||
+    callee.name !== "require" ||
+    args[0]?.type !== "StringLiteral" ||
+    typeof args[0].value !== "string"
+  ) {
+    return;
+  }
+
+  if (args[0].value === "clsx" || args[0].value === "classnames") {
+    helpers.add(id.name ?? "");
+  }
+}
+
+function collectClassHelpersFromModule(source: string): Set<string> {
+  const helpers = new Set(KNOWN_CLASS_HELPERS);
+
+  try {
+    const ast = parseBabel(source, {
+      sourceType: "module",
+      plugins: ["jsx", "typescript"],
+    });
+
+    walkReactAst(ast, (node) => {
+      if (node.type === "ImportDeclaration") {
+        collectReactClassHelpers(node, helpers);
+        return;
+      }
+
+      if (node.type === "VariableDeclarator") {
+        collectRequireClassHelper(node, helpers);
+      }
+    });
+  } catch {
+    return helpers;
+  }
+
+  return helpers;
+}
+
 function escapeTemplateText(value: string): string {
   return value
     .replaceAll("\\", "\\\\")
@@ -1153,15 +1211,10 @@ function rewriteReactClassNames(
       sourceType: "module",
       plugins: ["jsx", "typescript"],
     });
-    const classHelpers = new Set(KNOWN_CLASS_HELPERS);
+    const classHelpers = collectClassHelpersFromModule(content);
     const replacements: Replacement[] = [];
 
     walkReactAst(ast, (node) => {
-      if (node.type === "ImportDeclaration") {
-        collectReactClassHelpers(node, classHelpers);
-        return;
-      }
-
       if (node.type !== "JSXAttribute") {
         return;
       }
@@ -1365,24 +1418,42 @@ function getVueModuleAccessor(
 function rewriteVueBindingExpression(
   expression: string,
   classToExpr: Map<string, string>,
+  classHelpers: Set<string>,
 ): RewriteResult {
   try {
     const ast = parseExpression(expression, {
       plugins: ["typescript"],
     }) as unknown as ReactAstNode;
 
-    return rewriteReactExpression(
-      expression,
-      ast,
-      classToExpr,
-      new Set(KNOWN_CLASS_HELPERS),
-    );
+    return rewriteReactExpression(expression, ast, classToExpr, classHelpers);
   } catch {
     return {
       changed: false,
       code: expression,
     };
   }
+}
+
+function collectVueClassHelpers(content: string): Set<string> {
+  const helpers = new Set(KNOWN_CLASS_HELPERS);
+
+  try {
+    const sfc = parseVueSfc(content);
+    const scriptContents = [
+      sfc.descriptor.script?.content,
+      sfc.descriptor.scriptSetup?.content,
+    ].filter((value): value is string => typeof value === "string");
+
+    for (const scriptContent of scriptContents) {
+      for (const helper of collectClassHelpersFromModule(scriptContent)) {
+        helpers.add(helper);
+      }
+    }
+  } catch {
+    return helpers;
+  }
+
+  return helpers;
 }
 
 function rewriteVueClassBindings(
@@ -1400,6 +1471,7 @@ function rewriteVueClassBindings(
       return content;
     }
 
+    const classHelpers = collectVueClassHelpers(content);
     const replacements: Replacement[] = [];
     const stack: VueTemplateNode[] = [ast];
 
@@ -1419,7 +1491,11 @@ function rewriteVueClassBindings(
           : undefined;
       const bindingRewrite =
         bindingClass && typeof bindingClass.exp?.content === "string"
-          ? rewriteVueBindingExpression(bindingClass.exp.content, classToExpr)
+          ? rewriteVueBindingExpression(
+              bindingClass.exp.content,
+              classToExpr,
+              classHelpers,
+            )
           : undefined;
 
       if (staticRewrite && bindingClass && typeof bindingClass.exp?.content === "string") {
