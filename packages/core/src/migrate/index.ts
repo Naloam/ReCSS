@@ -18,7 +18,7 @@ const DOM_CLASS_LIST_METHODS = new Set([
   "replace",
   "toggle",
 ]);
-const REACT_SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".tsx"]);
+const REACT_SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx"]);
 const SOURCE_EXTENSIONS = new Set([
   ".vue",
   ".tsx",

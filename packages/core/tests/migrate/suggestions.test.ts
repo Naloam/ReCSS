@@ -253,6 +253,54 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should rewrite dom class apis in react ts sources", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-dom-class-api-ts-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/theme"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/theme/theme.scss"),
+        ".dark { color: white; }\n.theme-ready { opacity: 1; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/theme/applyTheme.ts"),
+        [
+          'import "./theme.scss";',
+          "",
+          "export function applyTheme(root: HTMLElement, active: boolean): void {",
+          '  root.classList.add("dark", "theme-ready");',
+          '  root.setAttribute("class", active ? "dark" : "theme-ready");',
+          "}",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      const result = await applyMigrationSuggestions(root, suggestions);
+
+      expect(result.copiedFiles).toBe(1);
+      expect(result.updatedSourceFiles).toBe(1);
+
+      const rewritten = await readFile(
+        resolve(root, "src/theme/applyTheme.ts"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./theme.module.scss";');
+      expect(rewritten).toContain(
+        'root.classList.add(styles.dark, styles["theme-ready"]);',
+      );
+      expect(rewritten).toContain(
+        'root.setAttribute("class", active ? styles.dark : styles["theme-ready"]);',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should reuse existing react module imports and remove duplicate side-effect imports", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-existing-module-import-"),
