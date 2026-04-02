@@ -89,6 +89,7 @@ import {
   createDiagnosticCodeActions,
   REFRESH_ANALYSIS_COMMAND,
   REMOVE_UNUSED_CLASS_RULE_TITLE,
+  REMOVE_UNUSED_CLASS_SELECTOR_TITLE,
 } from "../src/code-actions.js";
 import { RECSS_DIAGNOSTIC_CODE } from "../src/diagnostics.js";
 
@@ -251,6 +252,56 @@ describe("createDiagnosticCodeActions", () => {
     expect(actions.map((action) => action.title)).toEqual([
       "ReCSS: Refresh Analysis",
       "ReCSS: Clear Diagnostics",
+    ]);
+  });
+
+  it("should remove only the unused selector from selector lists", () => {
+    const actions = createDiagnosticCodeActions(
+      createMockDocument(".card, .card-title {\n  color: red;\n}\n") as never,
+      {
+        diagnostics: [
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card",
+              selector: ".card",
+            },
+            message: 'Unused CSS class ".card" is not referenced.',
+            range: {
+              end: {
+                character: 5,
+                line: 0,
+              },
+              start: {
+                character: 0,
+                line: 0,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+        ],
+      } as never,
+    );
+
+    expect(actions).toHaveLength(3);
+    expect(actions[0]).toMatchObject({
+      title: REMOVE_UNUSED_CLASS_SELECTOR_TITLE,
+    });
+    expect(actions[0]?.edit?.entries).toEqual([
+      {
+        range: {
+          end: {
+            character: 7,
+            line: 0,
+          },
+          start: {
+            character: 0,
+            line: 0,
+          },
+        },
+        uri: "/workspace/app-a/src/styles/card.scss",
+      },
     ]);
   });
 

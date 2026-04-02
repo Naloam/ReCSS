@@ -6,6 +6,8 @@ export const REFRESH_ANALYSIS_COMMAND = "recss.refreshAnalysis";
 export const CLEAR_DIAGNOSTICS_COMMAND = "recss.clearDiagnostics";
 export const REMOVE_UNUSED_CLASS_RULE_TITLE =
   "ReCSS: Remove Unused Class Rule";
+export const REMOVE_UNUSED_CLASS_SELECTOR_TITLE =
+  "ReCSS: Remove Unused Class Selector";
 
 type UnusedClassDiagnosticData = {
   className: string;
@@ -36,10 +38,106 @@ function isSimpleClassSelector(
   return data.selector.trim() === `.${data.className}`;
 }
 
-export function resolveRuleRemovalRange(
+type SelectorSlice = {
+  end: number;
+  start: number;
+  text: string;
+};
+
+type UnusedClassRemoval = {
+  range: vscode.Range;
+  title: string;
+};
+
+type RuleBounds = {
+  blockEnd: number;
+  blockStart: number;
+  content: string;
+  removalEnd: number;
+  ruleStart: number;
+};
+
+function splitSelectorList(selectorText: string): SelectorSlice[] {
+  const selectors: SelectorSlice[] = [];
+  let quote: '"' | "'" | undefined;
+  let bracketDepth = 0;
+  let parenDepth = 0;
+  let segmentStart = 0;
+
+  function pushSelector(segmentEnd: number): void {
+    let start = segmentStart;
+    let end = segmentEnd;
+
+    while (start < end && /\s/u.test(selectorText[start] ?? "")) {
+      start += 1;
+    }
+
+    while (end > start && /\s/u.test(selectorText[end - 1] ?? "")) {
+      end -= 1;
+    }
+
+    if (start >= end) {
+      return;
+    }
+
+    selectors.push({
+      start,
+      end,
+      text: selectorText.slice(start, end).trim(),
+    });
+  }
+
+  for (let index = 0; index < selectorText.length; index += 1) {
+    const char = selectorText[index];
+    const previous = selectorText[index - 1];
+
+    if (quote) {
+      if (char === quote && previous !== "\\") {
+        quote = undefined;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "[") {
+      bracketDepth += 1;
+      continue;
+    }
+
+    if (char === "]") {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      continue;
+    }
+
+    if (char === "(") {
+      parenDepth += 1;
+      continue;
+    }
+
+    if (char === ")") {
+      parenDepth = Math.max(0, parenDepth - 1);
+      continue;
+    }
+
+    if (char === "," && bracketDepth === 0 && parenDepth === 0) {
+      pushSelector(index);
+      segmentStart = index + 1;
+    }
+  }
+
+  pushSelector(selectorText.length);
+
+  return selectors;
+}
+
+function resolveRuleBounds(
   document: vscode.TextDocument,
   diagnostic: vscode.Diagnostic,
-): vscode.Range | undefined {
+): RuleBounds | undefined {
   const data = diagnostic.data;
   if (!isUnusedClassDiagnosticData(data) || !isSimpleClassSelector(data)) {
     return undefined;
@@ -90,28 +188,97 @@ export function resolveRuleRemovalRange(
     removalEnd += 1;
   }
 
-  return new vscode.Range(
-    document.positionAt(ruleStart),
-    document.positionAt(removalEnd),
+  return {
+    blockEnd,
+    blockStart,
+    content,
+    removalEnd,
+    ruleStart,
+  };
+}
+
+export function resolveRuleRemovalRange(
+  document: vscode.TextDocument,
+  diagnostic: vscode.Diagnostic,
+): vscode.Range | undefined {
+  const removal = resolveUnusedClassRemoval(document, diagnostic);
+  return removal?.title === REMOVE_UNUSED_CLASS_RULE_TITLE
+    ? removal.range
+    : undefined;
+}
+
+function resolveUnusedClassRemoval(
+  document: vscode.TextDocument,
+  diagnostic: vscode.Diagnostic,
+): UnusedClassRemoval | undefined {
+  const data = diagnostic.data;
+  if (!isUnusedClassDiagnosticData(data) || !isSimpleClassSelector(data)) {
+    return undefined;
+  }
+
+  const bounds = resolveRuleBounds(document, diagnostic);
+  if (!bounds) {
+    return undefined;
+  }
+
+  const selectorText = bounds.content.slice(bounds.ruleStart, bounds.blockStart);
+  const selectors = splitSelectorList(selectorText);
+  const selectorIndex = selectors.findIndex(
+    (selector) => selector.text === data.selector.trim(),
   );
+  if (selectorIndex < 0) {
+    return undefined;
+  }
+
+  if (selectors.length === 1) {
+    return {
+      title: REMOVE_UNUSED_CLASS_RULE_TITLE,
+      range: new vscode.Range(
+        document.positionAt(bounds.ruleStart),
+        document.positionAt(bounds.removalEnd),
+      ),
+    };
+  }
+
+  const target = selectors[selectorIndex];
+  if (!target) {
+    return undefined;
+  }
+
+  const removalStart =
+    selectorIndex === 0
+      ? target.start
+      : (selectors[selectorIndex - 1]?.end ?? target.start);
+  const removalEnd =
+    selectorIndex === 0
+      ? (selectors[selectorIndex + 1]?.start ?? target.end)
+      : target.end;
+
+  return {
+    title: REMOVE_UNUSED_CLASS_SELECTOR_TITLE,
+    range: new vscode.Range(
+      document.positionAt(bounds.ruleStart + removalStart),
+      document.positionAt(bounds.ruleStart + removalEnd),
+    ),
+  };
 }
 
 function createRemoveUnusedClassRuleAction(
   document: vscode.TextDocument,
   diagnostic: vscode.Diagnostic,
 ): vscode.CodeAction | undefined {
-  const range = resolveRuleRemovalRange(document, diagnostic);
-  if (!range) {
+  const removal = resolveUnusedClassRemoval(document, diagnostic);
+  if (!removal) {
     return undefined;
   }
 
   const action = new vscode.CodeAction(
-    REMOVE_UNUSED_CLASS_RULE_TITLE,
+    removal.title,
     vscode.CodeActionKind.QuickFix,
   );
   const edit = new vscode.WorkspaceEdit();
 
-  edit.delete(document.uri, range);
+  edit.delete(document.uri, removal.range);
   action.edit = edit;
   action.diagnostics = [diagnostic];
 
