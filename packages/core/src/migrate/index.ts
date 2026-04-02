@@ -218,6 +218,28 @@ function toVueStyleAccess(moduleAccessor: string, className: string): string {
   return `${moduleAccessor}["${className}"]`;
 }
 
+function registerClassExpression(
+  classToExpr: Map<string, string>,
+  ambiguousClasses: Set<string>,
+  className: string,
+  expression: string,
+): void {
+  if (ambiguousClasses.has(className)) {
+    return;
+  }
+
+  const existingExpression = classToExpr.get(className);
+  if (!existingExpression) {
+    classToExpr.set(className, expression);
+    return;
+  }
+
+  if (existingExpression !== expression) {
+    classToExpr.delete(className);
+    ambiguousClasses.add(className);
+  }
+}
+
 function removeSideEffectImport(content: string, importPath: string): string {
   const escapedPath = escapeRegExp(importPath);
   const sideEffectImportPattern = new RegExp(
@@ -1787,7 +1809,9 @@ export async function applyMigrationSuggestions(
     let content = await readFile(sourceFile, "utf8");
     const before = content;
     const classToExpr = new Map<string, string>();
+    const ambiguousReactClasses = new Set<string>();
     const vueClassToExpr = new Map<string, string>();
+    const ambiguousVueClasses = new Set<string>();
 
     for (const suggestion of suggestions) {
       const sourceDir = dirname(sourceFile);
@@ -1803,12 +1827,12 @@ export async function applyMigrationSuggestions(
         content = ensured.content;
         if (ensured.alias) {
           for (const className of suggestion.classNames) {
-            if (!classToExpr.has(className)) {
-              classToExpr.set(
-                className,
-                toStyleAccess(ensured.alias, className),
-              );
-            }
+            registerClassExpression(
+              classToExpr,
+              ambiguousReactClasses,
+              className,
+              toStyleAccess(ensured.alias, className),
+            );
           }
         }
       }
@@ -1820,12 +1844,12 @@ export async function applyMigrationSuggestions(
         const moduleAccessor =
           getVueModuleAccessor(content, newImportPath) ?? "$style";
         for (const className of suggestion.classNames) {
-          if (!vueClassToExpr.has(className)) {
-            vueClassToExpr.set(
-              className,
-              toVueStyleAccess(moduleAccessor, className),
-            );
-          }
+          registerClassExpression(
+            vueClassToExpr,
+            ambiguousVueClasses,
+            className,
+            toVueStyleAccess(moduleAccessor, className),
+          );
         }
       }
     }

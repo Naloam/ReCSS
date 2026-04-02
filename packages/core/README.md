@@ -32,4 +32,4 @@ Supported: static `class`, object `:class`, array `:class`, mixed static + dynam
 
 ### Limitations
 
-This is a targeted migration helper, not a general AST transformer. Dynamic variable references and complex member expressions are left untouched. Wrapper calls are only rewritten when their nested arguments match supported class patterns.
+This is a targeted migration helper, not a general AST transformer. Dynamic variable references and complex member expressions are left untouched. Wrapper calls are only rewritten when their nested arguments match supported class patterns, and ambiguous class names across multiple imported style modules are intentionally left unchanged.
