@@ -64,6 +64,21 @@ describe("parseJsxCode", () => {
     expect(result.used.has("is-idle")).toBe(true);
   });
 
+  it("should extract classes from React.createElement props", () => {
+    const result = parseJsxCode(
+      "/virtual/App.tsx",
+      [
+        'import React from "react";',
+        "export function App(active: boolean) {",
+        '  return React.createElement("div", { className: active ? "card" : "card-title" });',
+        "}",
+      ].join("\n"),
+    );
+
+    expect(result.used.has("card")).toBe(true);
+    expect(result.used.has("card-title")).toBe(true);
+  });
+
   it("should skip css modules member expression", () => {
     const result = parseJsxCode(
       "/virtual/App.tsx",

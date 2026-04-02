@@ -20,6 +20,7 @@ const DOM_CLASS_LIST_METHODS = new Set([
   "contains",
   "replace",
 ]);
+const REACT_FACTORY_METHODS = new Set(["createElement", "cloneElement"]);
 
 function createEmptyResult(): SourceScanResult {
   return {
@@ -425,6 +426,90 @@ function collectFromDomClassAssignment(
   collectExpressionClasses(sourceCode, right, used, uncertain, classHelpers);
 }
 
+function isReactFactoryCall(callNode: AstNode): boolean {
+  const callee = callNode.callee as AstNode | undefined;
+  if (!callee || callee.type !== "MemberExpression") {
+    return false;
+  }
+
+  const objectNode = callee.object as AstNode | undefined;
+  if (objectNode?.type !== "Identifier" || objectNode.name !== "React") {
+    return false;
+  }
+
+  return REACT_FACTORY_METHODS.has(getMemberPropertyName(callee) ?? "");
+}
+
+function collectFromReactPropsObject(
+  sourceCode: string,
+  objectNode: AstNode,
+  used: Set<string>,
+  uncertain: Set<string>,
+  classHelpers: Set<string>,
+): void {
+  const properties = Array.isArray(objectNode.properties)
+    ? (objectNode.properties as AstNode[])
+    : [];
+
+  for (const property of properties) {
+    if (property.type !== "ObjectProperty" || Boolean(property.computed)) {
+      continue;
+    }
+
+    const key = property.key as AstNode | undefined;
+    const value = property.value as AstNode | undefined;
+    if (!key || !value) {
+      continue;
+    }
+
+    const propertyName =
+      key.type === "Identifier"
+        ? key.name
+        : key.type === "StringLiteral" && typeof key.value === "string"
+          ? key.value
+          : undefined;
+    if (propertyName !== "className") {
+      continue;
+    }
+
+    collectExpressionClasses(
+      sourceCode,
+      value,
+      used,
+      uncertain,
+      classHelpers,
+    );
+  }
+}
+
+function collectFromReactFactoryCall(
+  sourceCode: string,
+  callNode: AstNode,
+  used: Set<string>,
+  uncertain: Set<string>,
+  classHelpers: Set<string>,
+): void {
+  if (!isReactFactoryCall(callNode)) {
+    return;
+  }
+
+  const args = Array.isArray(callNode.arguments)
+    ? (callNode.arguments as AstNode[])
+    : [];
+  const propsArg = args[1];
+  if (!propsArg || propsArg.type !== "ObjectExpression") {
+    return;
+  }
+
+  collectFromReactPropsObject(
+    sourceCode,
+    propsArg,
+    used,
+    uncertain,
+    classHelpers,
+  );
+}
+
 function collectFromClassNameAttribute(
   sourceCode: string,
   attributeNode: AstNode,
@@ -485,6 +570,13 @@ export function parseJsxCode(
 
       if (node.type === "CallExpression") {
         collectFromDomClassCall(
+          sourceCode,
+          node,
+          result.used,
+          result.uncertain,
+          classHelpers,
+        );
+        collectFromReactFactoryCall(
           sourceCode,
           node,
           result.used,

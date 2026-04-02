@@ -18,6 +18,7 @@ const DOM_CLASS_LIST_METHODS = new Set([
   "replace",
   "toggle",
 ]);
+const REACT_FACTORY_METHODS = new Set(["createElement", "cloneElement"]);
 const REACT_SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx"]);
 const SOURCE_EXTENSIONS = new Set([
   ".vue",
@@ -1535,6 +1536,93 @@ function buildDomClassAssignmentReplacement(
   );
 }
 
+function isReactFactoryCallExpression(expression: ReactAstNode): boolean {
+  const callee = expression.callee as ReactAstNode | undefined;
+  if (!isReactMemberExpression(callee)) {
+    return false;
+  }
+
+  const objectNode = callee.object as ReactAstNode | undefined;
+  if (objectNode?.type !== "Identifier" || objectNode.name !== "React") {
+    return false;
+  }
+
+  return REACT_FACTORY_METHODS.has(
+    getStaticPropertyKey(callee.property as ReactAstNode) ?? "",
+  );
+}
+
+function buildReactFactoryPropsReplacement(
+  source: string,
+  expression: ReactAstNode,
+  classToExpr: Map<string, string>,
+  classHelpers: Set<string>,
+): Replacement | undefined {
+  if (!isReactFactoryCallExpression(expression)) {
+    return undefined;
+  }
+
+  const args = Array.isArray(expression.arguments)
+    ? (expression.arguments as ReactAstNode[])
+    : [];
+  const propsArg = args[1];
+  if (
+    !propsArg ||
+    propsArg.type !== "ObjectExpression" ||
+    typeof propsArg.start !== "number" ||
+    typeof propsArg.end !== "number"
+  ) {
+    return undefined;
+  }
+
+  const properties = Array.isArray(propsArg.properties)
+    ? (propsArg.properties as ReactAstNode[])
+    : [];
+  const replacements: Replacement[] = [];
+
+  for (const property of properties) {
+    if (property.type !== "ObjectProperty" || Boolean(property.computed)) {
+      continue;
+    }
+
+    const keyNode = property.key as ReactAstNode | undefined;
+    const valueNode = property.value as ReactAstNode | undefined;
+    if (!keyNode || !valueNode) {
+      continue;
+    }
+
+    if (getStaticPropertyKey(keyNode) !== "className") {
+      continue;
+    }
+
+    const replacement = buildReactExpressionReplacement(
+      source,
+      valueNode,
+      classToExpr,
+      classHelpers,
+      true,
+    );
+    if (replacement) {
+      replacements.push(replacement);
+    }
+  }
+
+  if (replacements.length === 0) {
+    return undefined;
+  }
+
+  return {
+    start: propsArg.start,
+    end: propsArg.end,
+    value: applyReplacementSlice(
+      source,
+      propsArg.start,
+      propsArg.end,
+      replacements,
+    ),
+  };
+}
+
 function applyReplacements(content: string, replacements: Replacement[]): string {
   return [...replacements]
     .sort((left, right) => right.start - left.start)
@@ -1622,14 +1710,25 @@ function rewriteReactClassNames(
 
     walkReactAst(ast, (node) => {
       if (node.type === "CallExpression") {
-        const replacement = buildDomClassCallReplacement(
+        const domReplacement = buildDomClassCallReplacement(
           content,
           node,
           classToExpr,
           classHelpers,
         );
-        if (replacement) {
-          replacements.push(replacement);
+        if (domReplacement) {
+          replacements.push(domReplacement);
+          return;
+        }
+
+        const factoryReplacement = buildReactFactoryPropsReplacement(
+          content,
+          node,
+          classToExpr,
+          classHelpers,
+        );
+        if (factoryReplacement) {
+          replacements.push(factoryReplacement);
         }
         return;
       }
