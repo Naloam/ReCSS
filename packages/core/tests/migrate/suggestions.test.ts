@@ -122,6 +122,47 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should reuse existing react module imports and remove duplicate side-effect imports", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-existing-module-import-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import styles from "./card.module.scss";',
+          'import "./card.scss";',
+          "export const Card = () => <div className=\"card\" />;",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).not.toContain('import "./card.module.scss";');
+      expect(
+        rewritten.match(/import styles from "\.\/card\.module\.scss";/gu),
+      ).toHaveLength(1);
+      expect(rewritten).toContain('className={styles.card}');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should rewrite require-based react js sources", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-apply-cjs-"),
@@ -164,6 +205,56 @@ describe("migrate helpers", () => {
       expect(rewritten).toContain(
         'className={[styles.card, styles["card-title"]].join(" ")}',
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("should reuse existing require-based module aliases and remove duplicate side-effect requires", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-existing-module-require-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.js"),
+        [
+          'const React = require("react");',
+          'const styles = require("./card.module.scss");',
+          'require("./card.scss");',
+          "",
+          "module.exports = function Card() {",
+          '  return <div className="card" />;',
+          "};",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.js"),
+        "utf8",
+      );
+      expect(rewritten).toContain(
+        'const styles = require("./card.module.scss");',
+      );
+      expect(
+        rewritten.match(/const styles = require\("\.\/card\.module\.scss"\);/gu),
+      ).toHaveLength(1);
+      expect(
+        rewritten.match(/^[\t ]*require\("\.\/card\.module\.scss"\);$/gmu) ??
+          [],
+      ).toHaveLength(0);
+      expect(rewritten).toContain('className={styles.card}');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

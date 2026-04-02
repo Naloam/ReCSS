@@ -60,7 +60,7 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 - This is **not** a general-purpose AST auto-migration tool. It covers the most common className patterns listed above.
 - Dynamic variable references (e.g., `className={someVar}`) and complex member expressions are still left untouched.
 - Wrapper calls can be rewritten when their nested arguments are supported class expressions.
-- Files that already use CSS Modules (`styles.xxx`) are skipped.
+- Existing CSS Modules imports are reused, and duplicate side-effect style imports are removed during migration.
 - Spread operators and deeply nested expressions may not be fully rewritten.
 - Only `.css` and `.scss` source files are processed.
 
