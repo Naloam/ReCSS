@@ -615,6 +615,7 @@ function rewriteReactObjectProperty(
       keyNode,
       classToExpr,
       classHelpers,
+      false,
     );
     keyCode = `[${rewrittenKey.code}]`;
     changed ||= rewrittenKey.changed;
@@ -625,6 +626,7 @@ function rewriteReactObjectProperty(
     valueNode,
     classToExpr,
     classHelpers,
+    false,
   );
   changed ||= rewrittenValue.changed;
 
@@ -643,6 +645,7 @@ function rewriteReactExpression(
   expression: ReactAstNode,
   classToExpr: Map<string, string>,
   classHelpers: Set<string>,
+  stringContext = false,
 ): RewriteResult {
   switch (expression.type) {
     case "StringLiteral": {
@@ -681,6 +684,7 @@ function rewriteReactExpression(
             nestedExpression,
             classToExpr,
             classHelpers,
+            true,
           );
           code += `\${${rewrittenExpression.code}}`;
           changed ||= rewrittenExpression.changed;
@@ -704,12 +708,14 @@ function rewriteReactExpression(
         consequent,
         classToExpr,
         classHelpers,
+        stringContext,
       );
       const rewrittenAlternate = rewriteReactExpression(
         source,
         alternate,
         classToExpr,
         classHelpers,
+        stringContext,
       );
 
       if (!rewrittenConsequent.changed && !rewrittenAlternate.changed) {
@@ -746,6 +752,7 @@ function rewriteReactExpression(
           operand,
           classToExpr,
           classHelpers,
+          true,
         );
         code += `\${${rewrittenOperand.code}}`;
         changed ||= rewrittenOperand.changed;
@@ -769,12 +776,14 @@ function rewriteReactExpression(
         left,
         classToExpr,
         classHelpers,
+        false,
       );
       const rewrittenRight = rewriteReactExpression(
         source,
         right,
         classToExpr,
         classHelpers,
+        stringContext,
       );
 
       if (!rewrittenLeft.changed && !rewrittenRight.changed) {
@@ -809,6 +818,7 @@ function rewriteReactExpression(
             argument,
             classToExpr,
             classHelpers,
+            false,
           );
           rewrittenElements.push(`...${rewrittenArgument.code}`);
           changed ||= rewrittenArgument.changed;
@@ -820,18 +830,22 @@ function rewriteReactExpression(
           element,
           classToExpr,
           classHelpers,
+          false,
         );
         rewrittenElements.push(rewrittenElement.code);
         changed ||= rewrittenElement.changed;
       }
 
-      if (!changed) {
+      const code = `[${rewrittenElements.join(", ")}]`;
+      if (!changed && !stringContext) {
         return preserveReactNode(source, expression);
       }
 
       return {
-        changed: true,
-        code: `[${rewrittenElements.join(", ")}]`,
+        changed,
+        code: stringContext
+          ? formatReactClassNameCode(expression, code)
+          : code,
       };
     }
     case "ObjectExpression": {
@@ -853,6 +867,7 @@ function rewriteReactExpression(
             argument,
             classToExpr,
             classHelpers,
+            false,
           );
           rewrittenProperties.push(`...${rewrittenArgument.code}`);
           changed ||= rewrittenArgument.changed;
@@ -894,7 +909,7 @@ function rewriteReactExpression(
         classHelpers.has(callee.name)
       ) {
         const rewrittenArgs = args.map((arg) =>
-          rewriteReactExpression(source, arg, classToExpr, classHelpers),
+          rewriteReactExpression(source, arg, classToExpr, classHelpers, false),
         );
         if (!rewrittenArgs.some((result) => result.changed)) {
           return preserveReactNode(source, expression);
@@ -921,9 +936,10 @@ function rewriteReactExpression(
           objectNode,
           classToExpr,
           classHelpers,
+          false,
         );
         const rewrittenArgs = args.map((arg) =>
-          rewriteReactExpression(source, arg, classToExpr, classHelpers),
+          rewriteReactExpression(source, arg, classToExpr, classHelpers, false),
         );
         let changed =
           rewrittenObject.changed ||
@@ -936,22 +952,27 @@ function rewriteReactExpression(
             propertyNode,
             classToExpr,
             classHelpers,
+            false,
           );
           propertyCode = rewrittenProperty.code;
           changed ||= rewrittenProperty.changed;
-        }
-
-        if (!changed) {
-          return preserveReactNode(source, expression);
         }
 
         const accessor = Boolean(callee.computed)
           ? `[${propertyCode}]`
           : `${Boolean(callee.optional) ? "?." : "."}${propertyCode}`;
 
+        const code = `${rewrittenObject.code}${accessor}(${rewrittenArgs.map((result) => result.code).join(", ")})`;
+        if (!changed && !stringContext) {
+          return preserveReactNode(source, expression);
+        }
+
         return {
-          changed: true,
-          code: `${rewrittenObject.code}${accessor}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
+          changed,
+          code:
+            stringContext && getReactClassValueKind(expression) === "array"
+              ? formatReactClassNameCode(expression, code)
+              : code,
         };
       }
 
@@ -970,6 +991,7 @@ function rewriteReactExpression(
         objectNode,
         classToExpr,
         classHelpers,
+        false,
       );
       let changed = rewrittenObject.changed;
       let propertyCode = getReactNodeSource(source, propertyNode);
@@ -980,6 +1002,7 @@ function rewriteReactExpression(
           propertyNode,
           classToExpr,
           classHelpers,
+          false,
         );
         propertyCode = rewrittenProperty.code;
         changed ||= rewrittenProperty.changed;
@@ -1009,6 +1032,7 @@ function rewriteReactExpression(
         nestedExpression,
         classToExpr,
         classHelpers,
+        stringContext,
       );
       if (!rewrittenExpression.changed) {
         return preserveReactNode(source, expression);
@@ -1065,6 +1089,7 @@ function buildClassNameReplacement(
     expression,
     classToExpr,
     classHelpers,
+    true,
   );
   if (!rewritten.changed) {
     return undefined;
@@ -1073,7 +1098,7 @@ function buildClassNameReplacement(
   return {
     start: valueNode.start,
     end: valueNode.end,
-    value: `{${formatReactClassNameCode(expression, rewritten.code)}}`,
+    value: `{${rewritten.code}}`,
   };
 }
 

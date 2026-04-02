@@ -384,6 +384,84 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should normalize array branches inside conditional className expressions", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-conditional-array-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import "./card.scss";',
+          "export const Card = ({ active }: { active: boolean }) =>",
+          '  <div className={active ? ["card", "active"] : "card"} />;',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'className={active ? [styles.card, styles.active].filter(Boolean).join(" ") : styles.card}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("should normalize array expressions interpolated inside template literals", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-template-array-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import "./card.scss";',
+          "export const Card = ({ active }: { active: boolean }) =>",
+          '  <div className={`prefix ${active ? ["card", "active"] : []}`} />;',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'className={`prefix ${active ? [styles.card, styles.active].filter(Boolean).join(" ") : [].filter(Boolean).join(" ")}`}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should rewrite vue template classes when module style src is present", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "recss-core-migrate-vue-"));
 
