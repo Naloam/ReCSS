@@ -25,14 +25,23 @@ describe("migrate helpers", () => {
 
     try {
       await mkdir(resolve(root, "src"), { recursive: true });
+      await mkdir(resolve(root, "dist"), { recursive: true });
+      await mkdir(resolve(root, ".vercel/output/static"), { recursive: true });
       await writeFile(resolve(root, "src/card.scss"), ".card { color: red; }");
       await writeFile(resolve(root, "src/button.module.scss"), ".btn {}");
+      await writeFile(resolve(root, "dist/bundle.scss"), ".bundle {}");
+      await writeFile(
+        resolve(root, ".vercel/output/static/app.css"),
+        ".artifact {}",
+      );
 
       const files = await collectStyleFiles(root);
       expect(files.some((file) => file.endsWith("card.scss"))).toBe(true);
       expect(files.some((file) => file.endsWith("button.module.scss"))).toBe(
         false,
       );
+      expect(files.some((file) => file.endsWith("bundle.scss"))).toBe(false);
+      expect(files.some((file) => file.endsWith("app.css"))).toBe(false);
 
       const suggestions = await buildMigrationSuggestions(root);
       expect(suggestions).toHaveLength(1);
@@ -74,6 +83,55 @@ describe("migrate helpers", () => {
       expect(rewritten).toContain(
         'className={[styles.card, styles["card-title"]].join(" ")}',
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("should skip generated directories when applying migration", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-generated-output-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await mkdir(resolve(root, ".vercel/output/static"), {
+        recursive: true,
+      });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        'import "./card.scss";\nexport const Card = () => <div className="card" />;\n',
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, ".vercel/output/static/Card.tsx"),
+        [
+          'import "../../../src/components/card.scss";',
+          'export const Card = () => <div className="card" />;',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      const result = await applyMigrationSuggestions(root, suggestions);
+
+      expect(result.copiedFiles).toBe(1);
+      expect(result.updatedSourceFiles).toBe(1);
+
+      const generatedOutput = await readFile(
+        resolve(root, ".vercel/output/static/Card.tsx"),
+        "utf8",
+      );
+      expect(generatedOutput).toContain(
+        'import "../../../src/components/card.scss";',
+      );
+      expect(generatedOutput).toContain('className="card"');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

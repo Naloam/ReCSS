@@ -4,9 +4,9 @@ import { dirname, extname, relative, resolve } from "node:path";
 import { parse as parseBabel, parseExpression } from "@babel/parser";
 import { parse as parseVueSfc } from "@vue/compiler-sfc";
 
+import { shouldSkipGeneratedDirectory } from "../generated-dirs.js";
 import type { MigrationSuggestion } from "../types.js";
 
-const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".vscode"]);
 const STYLE_EXTENSIONS = new Set([".css", ".scss"]);
 const KNOWN_CLASS_HELPERS = new Set(["clsx", "cn", "classnames"]);
 const REACT_SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".tsx"]);
@@ -64,7 +64,7 @@ export async function collectStyleFiles(directory: string): Promise<string[]> {
     for (const entry of entries) {
       const fullPath = resolve(current, entry.name);
       if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name)) {
+        if (!shouldSkipGeneratedDirectory(entry.name)) {
           queue.push(fullPath);
         }
         continue;
@@ -178,7 +178,7 @@ async function collectSourceFiles(root: string): Promise<string[]> {
     for (const entry of entries) {
       const fullPath = resolve(current, entry.name);
       if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name)) {
+        if (!shouldSkipGeneratedDirectory(entry.name)) {
           queue.push(fullPath);
         }
         continue;

@@ -2,15 +2,8 @@ import { resolve } from "node:path";
 
 import fg from "fast-glob";
 
+import { appendGeneratedDirectoryExcludes } from "../generated-dirs.js";
 import type { ScanOptions, ScanResult } from "../types.js";
-
-const NODE_MODULES_GLOB = "**/node_modules/**";
-
-function withDefaultExcludes(excludes: string[]): string[] {
-  return excludes.includes(NODE_MODULES_GLOB)
-    ? excludes
-    : [...excludes, NODE_MODULES_GLOB];
-}
 
 function classifySourceFiles(
   files: string[],
@@ -45,8 +38,8 @@ function classifySourceFiles(
 export async function scanFiles(options: ScanOptions): Promise<ScanResult> {
   const root = resolve(options.root);
 
-  const cssIgnore = withDefaultExcludes(options.cssExclude);
-  const sourceIgnore = withDefaultExcludes(options.sourceExclude);
+  const cssIgnore = appendGeneratedDirectoryExcludes(options.cssExclude);
+  const sourceIgnore = appendGeneratedDirectoryExcludes(options.sourceExclude);
 
   const [cssFiles, sourceFiles] = await Promise.all([
     fg(options.cssInclude, {
