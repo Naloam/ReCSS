@@ -1,7 +1,7 @@
 # ReCSS Project Plan
 
 Version: v1.4  
-Status: Phase 2 delivered, future backlog in progress
+Status: Phase 2 delivered, initial Phase 3 ecosystem baseline delivered
 
 ## 1. Project Overview
 
@@ -25,8 +25,8 @@ Out of scope for current implementation:
 - Production CSS tree-shaking (PurgeCSS territory)
 - CSS-in-JS (styled-components, emotion)
 - Less support
-- CSS Modules migration automation
-- Vite and IDE integrations
+- Deep CSS Modules migration automation
+- Advanced IDE quick-fix workflows
 
 ### Users
 
@@ -52,10 +52,10 @@ Key libraries:
 - zod
 - specificity
 
-Deferred to later phases:
+Delivered or in progress in later phases:
 
-- Vite plugin
-- VSCode extension
+- Vite plugin: delivered
+- VSCode extension MVP: delivered
 
 ## 3. Features and Boundaries
 
@@ -74,8 +74,8 @@ Deferred to later phases:
 
 ### F3: CSS Modules Migration Assistant
 
-- Deferred to the future backlog
-- If implemented later, it stays component-scoped and diff-first
+- Component-scoped suggestion and apply flow is delivered
+- Deeper syntax rewrites remain in the future backlog
 
 ## 4. CLI Design
 
@@ -85,11 +85,6 @@ Current command:
 recss analyze [dir]
 recss check [dir]
 recss init [dir]
-```
-
-Planned later:
-
-```bash
 recss migrate <component-dir>
 ```
 
@@ -115,9 +110,8 @@ recss migrate <component-dir>
 
 ### Future Backlog
 
-- CSS Modules migration assistant
-- Vite plugin
-- VSCode extension
+- Richer CSS Modules rewrite coverage
+- VSCode quick fixes and code actions
 - Reporter formats beyond console/json
 
 ## 6. Acceptance Criteria
@@ -141,6 +135,7 @@ Delivered commands:
 - `recss analyze`
 - `recss check`
 - `recss init`
+- `recss migrate`
 
 Delivered analysis modules:
 

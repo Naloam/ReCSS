@@ -14,7 +14,7 @@ describe("recssVitePlugin integration", () => {
       await mkdir(resolve(root, "src"), { recursive: true });
       await writeFile(
         resolve(root, "src/App.vue"),
-        "<template><div class=\"btn-primary\" /></template>",
+        '<template><div class="btn-primary" /></template>',
         "utf8",
       );
       await writeFile(

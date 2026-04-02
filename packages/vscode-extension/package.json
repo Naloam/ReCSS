@@ -1,0 +1,66 @@
+{
+  "name": "@recss/vscode-extension",
+  "version": "0.1.0",
+  "description": "VSCode extension for inline ReCSS diagnostics.",
+  "license": "MIT",
+  "publisher": "recss",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "main": "./dist/extension.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:recss.refreshAnalysis"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "recss.refreshAnalysis",
+        "title": "ReCSS: Refresh Analysis"
+      }
+    ],
+    "configuration": {
+      "title": "ReCSS",
+      "properties": {
+        "recss.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline ReCSS diagnostics in the current workspace."
+        },
+        "recss.framework": {
+          "type": "string",
+          "enum": [
+            "config",
+            "auto",
+            "vue",
+            "react",
+            "html"
+          ],
+          "default": "config",
+          "description": "Framework override for VSCode analysis. Use config to respect recss.config.* or package.json#recss."
+        },
+        "recss.runOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refresh ReCSS diagnostics when relevant source or style files are saved."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "dependencies": {
+    "@recss/core": "workspace:*"
+  }
+}
