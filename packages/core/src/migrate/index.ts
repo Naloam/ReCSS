@@ -232,6 +232,15 @@ function ensureModuleImportAlias(
     return { content, alias: aliasMatch[1] };
   }
 
+  const requireAliasPattern = new RegExp(
+    `(?:const|let|var)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*require\\(\\s*["']${escapedPath}["']\\s*\\)`,
+    "u",
+  );
+  const requireAliasMatch = content.match(requireAliasPattern);
+  if (requireAliasMatch?.[1]) {
+    return { content, alias: requireAliasMatch[1] };
+  }
+
   const sideEffectImportPattern = new RegExp(
     `import\\s+["']${escapedPath}["'];?`,
     "u",
@@ -242,6 +251,24 @@ function ensureModuleImportAlias(
       content: content.replace(
         sideEffectImportPattern,
         `import ${alias} from "${importPath}";`,
+      ),
+      alias,
+    };
+  }
+
+  const sideEffectRequirePattern = new RegExp(
+    `(^|\\n)([\\t ]*)require\\(\\s*["']${escapedPath}["']\\s*\\);?`,
+    "u",
+  );
+  const sideEffectRequireMatch = content.match(sideEffectRequirePattern);
+  if (sideEffectRequireMatch) {
+    const alias = buildUnusedAlias(content);
+    const prefix = sideEffectRequireMatch[1] ?? "";
+    const indentation = sideEffectRequireMatch[2] ?? "";
+    return {
+      content: content.replace(
+        sideEffectRequirePattern,
+        `${prefix}${indentation}const ${alias} = require("${importPath}");`,
       ),
       alias,
     };

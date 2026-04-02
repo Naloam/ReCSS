@@ -122,6 +122,53 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should rewrite require-based react js sources", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-apply-cjs-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.card-title { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.js"),
+        [
+          'const React = require("react");',
+          'require("./card.scss");',
+          "",
+          "module.exports = function Card() {",
+          '  return <div className="card card-title" />;',
+          "};",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      const result = await applyMigrationSuggestions(root, suggestions);
+
+      expect(result.copiedFiles).toBe(1);
+      expect(result.updatedSourceFiles).toBe(1);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.js"),
+        "utf8",
+      );
+      expect(rewritten).toContain(
+        'const styles = require("./card.module.scss");',
+      );
+      expect(rewritten).toContain(
+        'className={[styles.card, styles["card-title"]].join(" ")}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should rewrite react template literals with mapped classes", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-template-"),
