@@ -7,7 +7,10 @@ import {
 } from "@recss/core";
 import { defineCommand } from "citty";
 
-function renderSuggestions(root: string, suggestions: MigrationSuggestion[]): string {
+function renderSuggestions(
+  root: string,
+  suggestions: MigrationSuggestion[],
+): string {
   const lines: string[] = [];
 
   lines.push("ReCSS migrate suggestions");
@@ -21,7 +24,8 @@ function renderSuggestions(root: string, suggestions: MigrationSuggestion[]): st
 
   for (const item of suggestions) {
     const file = relative(root, item.file) || item.file;
-    const moduleFile = relative(root, item.suggestedModuleFile) || item.suggestedModuleFile;
+    const moduleFile =
+      relative(root, item.suggestedModuleFile) || item.suggestedModuleFile;
 
     lines.push(`- ${file}`);
     lines.push(`  -> suggested rename: ${moduleFile}`);
@@ -48,7 +52,8 @@ export const migrateCommand = defineCommand({
     apply: {
       type: "boolean",
       required: false,
-      description: "Apply migration by creating .module files and updating imports.",
+      description:
+        "Apply migration by creating .module files and updating imports.",
     },
   },
   async run({ args }): Promise<void> {
