@@ -9,6 +9,7 @@ import type { MigrationSuggestion } from "../types.js";
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".vscode"]);
 const STYLE_EXTENSIONS = new Set([".css", ".scss"]);
 const KNOWN_CLASS_HELPERS = new Set(["clsx", "cn", "classnames"]);
+const REACT_SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".tsx"]);
 const SOURCE_EXTENSIONS = new Set([
   ".vue",
   ".tsx",
@@ -1492,7 +1493,7 @@ export async function applyMigrationSuggestions(
 
       content = replaceQuotedPath(content, oldImportPath, newImportPath);
 
-      if (extension === ".tsx" || extension === ".jsx") {
+      if (REACT_SOURCE_EXTENSIONS.has(extension)) {
         const ensured = ensureModuleImportAlias(content, newImportPath);
         content = ensured.content;
         if (ensured.alias) {
@@ -1524,7 +1525,7 @@ export async function applyMigrationSuggestions(
       }
     }
 
-    if (extension === ".tsx" || extension === ".jsx") {
+    if (REACT_SOURCE_EXTENSIONS.has(extension)) {
       content = rewriteReactClassNames(content, classToExpr);
     }
 

@@ -79,6 +79,49 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should apply migration and rewrite react className literals in js sources", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-apply-js-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.card-title { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.js"),
+        [
+          'import "./card.scss";',
+          "export function Card() {",
+          '  return <div className="card card-title" />;',
+          "}",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      const result = await applyMigrationSuggestions(root, suggestions);
+
+      expect(result.copiedFiles).toBe(1);
+      expect(result.updatedSourceFiles).toBe(1);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.js"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'className={[styles.card, styles["card-title"]].join(" ")}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should rewrite react template literals with mapped classes", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-template-"),
