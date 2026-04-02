@@ -406,6 +406,63 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should rewrite react factory variable aliases", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-react-factory-vars-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.card-title { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.js"),
+        [
+          'import React from "react";',
+          'import "./card.scss";',
+          "",
+          "export function Card(active) {",
+          "  const h = React.createElement;",
+          "  const { cloneElement: clone } = React;",
+          '  const base = h("div", { className: "card" });',
+          "  return clone(base, {",
+          '    className: active ? "card" : "card-title",',
+          '    title: "card",',
+          "  });",
+          "}",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      const result = await applyMigrationSuggestions(root, suggestions);
+
+      expect(result.copiedFiles).toBe(1);
+      expect(result.updatedSourceFiles).toBe(1);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.js"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'const base = h("div", { className: styles.card });',
+      );
+      expect(rewritten).toContain(
+        'className: active ? styles.card : styles["card-title"]',
+      );
+      expect(rewritten).toContain('title: "card"');
+      expect(rewritten).toContain("const h = React.createElement;");
+      expect(rewritten).toContain("const { cloneElement: clone } = React;");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should reuse existing react module imports and remove duplicate side-effect imports", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-existing-module-import-"),

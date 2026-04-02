@@ -658,6 +658,75 @@ function collectRequireReactBindings(
   }
 }
 
+function collectReactAliasBindings(
+  variableDeclarator: ReactAstNode,
+  bindings: ReactModuleBindings,
+): void {
+  const id = variableDeclarator.id as ReactAstNode | undefined;
+  const init = variableDeclarator.init as ReactAstNode | undefined;
+  if (!id || !init) {
+    return;
+  }
+
+  if (id.type === "Identifier" && typeof id.name === "string") {
+    if (init.type === "Identifier") {
+      if (bindings.reactNamespaces.has(init.name ?? "")) {
+        bindings.reactNamespaces.add(id.name);
+        return;
+      }
+
+      if (bindings.reactFactories.has(init.name ?? "")) {
+        bindings.reactFactories.add(id.name);
+      }
+      return;
+    }
+
+    if (!isReactMemberExpression(init)) {
+      return;
+    }
+
+    const objectNode = init.object as ReactAstNode | undefined;
+    const propertyName = getStaticPropertyKey(
+      init.property as ReactAstNode,
+    );
+    if (
+      objectNode?.type === "Identifier" &&
+      bindings.reactNamespaces.has(objectNode.name ?? "") &&
+      REACT_FACTORY_METHODS.has(propertyName ?? "")
+    ) {
+      bindings.reactFactories.add(id.name);
+    }
+    return;
+  }
+
+  if (id.type !== "ObjectPattern" || init.type !== "Identifier") {
+    return;
+  }
+
+  if (!bindings.reactNamespaces.has(init.name ?? "")) {
+    return;
+  }
+
+  const properties = Array.isArray(id.properties)
+    ? (id.properties as ReactAstNode[])
+    : [];
+  for (const property of properties) {
+    if (Boolean(property.computed)) {
+      continue;
+    }
+
+    const importedName = getStaticPropertyKey(property.key as ReactAstNode);
+    const localName = getObjectPatternBindingName(property);
+    if (
+      importedName &&
+      localName &&
+      REACT_FACTORY_METHODS.has(importedName)
+    ) {
+      bindings.reactFactories.add(localName);
+    }
+  }
+}
+
 function collectReactModuleBindings(source: string): ReactModuleBindings {
   const bindings = createReactModuleBindings();
 
@@ -676,6 +745,7 @@ function collectReactModuleBindings(source: string): ReactModuleBindings {
       if (node.type === "VariableDeclarator") {
         collectRequireClassHelper(node, bindings);
         collectRequireReactBindings(node, bindings);
+        collectReactAliasBindings(node, bindings);
       }
     });
   } catch {

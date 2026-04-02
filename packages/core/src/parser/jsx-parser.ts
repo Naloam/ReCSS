@@ -263,6 +263,74 @@ function collectReactRequireBindings(
   }
 }
 
+function collectReactAliasBindings(
+  variableDeclarator: AstNode,
+  reactNamespaces: Set<string>,
+  reactFactories: Set<string>,
+): void {
+  const id = variableDeclarator.id as AstNode | undefined;
+  const init = variableDeclarator.init as AstNode | undefined;
+  if (!id || !init) {
+    return;
+  }
+
+  if (id.type === "Identifier" && typeof id.name === "string") {
+    if (init.type === "Identifier") {
+      if (reactNamespaces.has(init.name ?? "")) {
+        reactNamespaces.add(id.name);
+        return;
+      }
+
+      if (reactFactories.has(init.name ?? "")) {
+        reactFactories.add(id.name);
+      }
+      return;
+    }
+
+    if (init.type !== "MemberExpression") {
+      return;
+    }
+
+    const objectNode = init.object as AstNode | undefined;
+    const propertyName = getMemberPropertyName(init);
+    if (
+      objectNode?.type === "Identifier" &&
+      reactNamespaces.has(objectNode.name ?? "") &&
+      REACT_FACTORY_METHODS.has(propertyName ?? "")
+    ) {
+      reactFactories.add(id.name);
+    }
+    return;
+  }
+
+  if (id.type !== "ObjectPattern" || init.type !== "Identifier") {
+    return;
+  }
+
+  if (!reactNamespaces.has(init.name ?? "")) {
+    return;
+  }
+
+  const properties = Array.isArray(id.properties)
+    ? (id.properties as AstNode[])
+    : [];
+  for (const property of properties) {
+    if (Boolean(property.computed)) {
+      continue;
+    }
+
+    const importedName = getStaticName(property.key as AstNode | undefined);
+    const localName = getObjectPatternBindingName(property);
+    if (
+      importedName &&
+      localName &&
+      REACT_FACTORY_METHODS.has(importedName)
+    ) {
+      reactFactories.add(localName);
+    }
+  }
+}
+
 function collectFromObjectExpression(
   objectNode: AstNode,
   used: Set<string>,
@@ -733,6 +801,7 @@ export function parseJsxCode(
 
       if (node.type === "VariableDeclarator") {
         collectReactRequireBindings(node, reactNamespaces, reactFactories);
+        collectReactAliasBindings(node, reactNamespaces, reactFactories);
       }
 
       if (node.type === "CallExpression") {

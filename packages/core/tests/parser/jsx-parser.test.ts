@@ -95,6 +95,24 @@ describe("parseJsxCode", () => {
     expect(result.used.has("card-title")).toBe(true);
   });
 
+  it("should extract classes from react factory variable aliases", () => {
+    const result = parseJsxCode(
+      "/virtual/App.tsx",
+      [
+        'import React from "react";',
+        "export function App(active: boolean) {",
+        "  const h = React.createElement;",
+        "  const { cloneElement: clone } = React;",
+        '  const base = h("div", { className: "card" });',
+        '  return clone(base, { className: active ? "card" : "card-title" });',
+        "}",
+      ].join("\n"),
+    );
+
+    expect(result.used.has("card")).toBe(true);
+    expect(result.used.has("card-title")).toBe(true);
+  });
+
   it("should skip css modules member expression", () => {
     const result = parseJsxCode(
       "/virtual/App.tsx",
