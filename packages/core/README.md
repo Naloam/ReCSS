@@ -24,12 +24,12 @@ The migration flow is exposed as two public functions:
 
 ### React className rewrite patterns
 
-Supported: string literals, template literals, clsx/cn/classnames calls, array literals, `.filter(Boolean).join(" ")`, `.concat()` chains, binary string concatenation (`"a " + b`), and conditional/logical expressions.
+Supported: string literals, template literals, clsx/cn/classnames calls, array literals, `.filter(Boolean).join(" ")`, `.concat()` chains, binary string concatenation (`"a " + b`), conditional/logical expressions, and wrapper function calls whose nested arguments use supported class patterns.
 
 ### Vue SFC rewrite patterns
 
-Supported: static `class`, object `:class`, array `:class`, mixed static + dynamic bindings, custom `<style module="alias">` references, and template rewrites that follow `useCssModule()` accessors declared in `<script>` or `<script setup>`.
+Supported: static `class`, object `:class`, array `:class`, mixed static + dynamic bindings, custom `<style module="alias">` references, wrapper function calls around supported expressions, and template rewrites that follow `useCssModule()` accessors declared in `<script>` or `<script setup>`.
 
 ### Limitations
 
-This is a targeted migration helper, not a general AST transformer. Dynamic variable references, function calls, and complex member expressions are left untouched.
+This is a targeted migration helper, not a general AST transformer. Dynamic variable references and complex member expressions are left untouched. Wrapper calls are only rewritten when their nested arguments match supported class patterns.
