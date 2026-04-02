@@ -1,11 +1,40 @@
 import { copyFile, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 
+import { parse } from "@babel/parser";
+
 import type { MigrationSuggestion } from "../types.js";
 
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".vscode"]);
 const STYLE_EXTENSIONS = new Set([".css", ".scss"]);
-const SOURCE_EXTENSIONS = new Set([".vue", ".tsx", ".jsx", ".ts", ".js", ".html"]);
+const KNOWN_CLASS_HELPERS = new Set(["clsx", "cn", "classnames"]);
+const SOURCE_EXTENSIONS = new Set([
+  ".vue",
+  ".tsx",
+  ".jsx",
+  ".ts",
+  ".js",
+  ".html",
+]);
+
+type ReactAstNode = {
+  [key: string]: unknown;
+  end?: number;
+  name?: string;
+  start?: number;
+  type: string;
+};
+
+type Replacement = {
+  end: number;
+  start: number;
+  value: string;
+};
+
+type RewriteResult = {
+  changed: boolean;
+  code: string;
+};
 
 function isModuleStyleFile(path: string): boolean {
   return path.endsWith(".module.css") || path.endsWith(".module.scss");
@@ -107,7 +136,11 @@ function toStyleAccess(alias: string, className: string): string {
   return `${alias}["${className}"]`;
 }
 
-function replaceQuotedPath(content: string, fromPath: string, toPath: string): string {
+function replaceQuotedPath(
+  content: string,
+  fromPath: string,
+  toPath: string,
+): string {
   const escaped = escapeRegExp(fromPath);
   const singleQuoted = new RegExp(`'${escaped}'`, "g");
   const doubleQuoted = new RegExp(`\"${escaped}\"`, "g");
@@ -227,6 +260,618 @@ function rewriteReactClassNameLiterals(
   });
 }
 
+function splitClassTokens(value: string): string[] {
+  return value
+    .trim()
+    .split(/\s+/u)
+    .filter((token) => token.length > 0);
+}
+
+function buildClassTokenExpression(
+  value: string,
+  classToExpr: Map<string, string>,
+): RewriteResult | undefined {
+  const tokens = splitClassTokens(value);
+  if (tokens.length === 0) {
+    return undefined;
+  }
+
+  const parts = tokens.map((token) => classToExpr.get(token) ?? `"${token}"`);
+  const changed = tokens.some((token) => classToExpr.has(token));
+  if (!changed) {
+    return undefined;
+  }
+
+  return {
+    changed: true,
+    code: parts.length === 1 ? parts[0] : `[${parts.join(", ")}].join(" ")`,
+  };
+}
+
+function getReactNodeSource(source: string, node: ReactAstNode): string {
+  if (typeof node.start === "number" && typeof node.end === "number") {
+    return source.slice(node.start, node.end);
+  }
+
+  return source;
+}
+
+function preserveReactNode(
+  source: string,
+  node: ReactAstNode,
+): RewriteResult {
+  return {
+    changed: false,
+    code: getReactNodeSource(source, node),
+  };
+}
+
+function walkReactAst(
+  node: unknown,
+  visit: (node: ReactAstNode) => void,
+): void {
+  if (!node || typeof node !== "object") {
+    return;
+  }
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      walkReactAst(item, visit);
+    }
+    return;
+  }
+
+  if (!("type" in node)) {
+    return;
+  }
+
+  const astNode = node as ReactAstNode;
+  visit(astNode);
+
+  for (const value of Object.values(astNode)) {
+    if (!value || typeof value !== "object") {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        walkReactAst(child, visit);
+      }
+      continue;
+    }
+
+    walkReactAst(value, visit);
+  }
+}
+
+function collectReactClassHelpers(
+  importNode: ReactAstNode,
+  helpers: Set<string>,
+): void {
+  const source = importNode.source as { value?: unknown } | undefined;
+  const importSource = typeof source?.value === "string" ? source.value : "";
+  const specifiers = Array.isArray(importNode.specifiers)
+    ? (importNode.specifiers as ReactAstNode[])
+    : [];
+
+  for (const specifier of specifiers) {
+    const local = specifier.local as { name?: unknown } | undefined;
+    const localName = typeof local?.name === "string" ? local.name : undefined;
+    if (!localName) {
+      continue;
+    }
+
+    if (KNOWN_CLASS_HELPERS.has(localName)) {
+      helpers.add(localName);
+    }
+
+    if (
+      specifier.type === "ImportDefaultSpecifier" &&
+      (importSource === "clsx" || importSource === "classnames")
+    ) {
+      helpers.add(localName);
+    }
+
+    if (specifier.type === "ImportSpecifier") {
+      const imported = specifier.imported as { name?: unknown } | undefined;
+      if (
+        typeof imported?.name === "string" &&
+        KNOWN_CLASS_HELPERS.has(imported.name)
+      ) {
+        helpers.add(localName);
+      }
+    }
+  }
+}
+
+function escapeTemplateText(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("`", "\\`")
+    .replaceAll("${", "\\${");
+}
+
+function rewriteTemplateText(
+  value: string,
+  classToExpr: Map<string, string>,
+): RewriteResult {
+  const segments = value.split(/(\s+)/u);
+  let changed = false;
+  let code = "";
+
+  for (const segment of segments) {
+    if (segment.length === 0) {
+      continue;
+    }
+
+    if (/^\s+$/u.test(segment)) {
+      code += escapeTemplateText(segment);
+      continue;
+    }
+
+    const mapped = classToExpr.get(segment);
+    if (mapped) {
+      code += `\${${mapped}}`;
+      changed = true;
+      continue;
+    }
+
+    code += escapeTemplateText(segment);
+  }
+
+  return {
+    changed,
+    code,
+  };
+}
+
+function getStaticPropertyKey(node: ReactAstNode): string | undefined {
+  if (node.type === "Identifier" && typeof node.name === "string") {
+    return node.name;
+  }
+
+  if (node.type === "StringLiteral" && typeof node.value === "string") {
+    return node.value;
+  }
+
+  return undefined;
+}
+
+function rewriteReactObjectProperty(
+  source: string,
+  property: ReactAstNode,
+  classToExpr: Map<string, string>,
+  classHelpers: Set<string>,
+): RewriteResult {
+  const keyNode = property.key as ReactAstNode | undefined;
+  const valueNode = property.value as ReactAstNode | undefined;
+  if (!keyNode || !valueNode) {
+    return preserveReactNode(source, property);
+  }
+
+  const computed = Boolean(property.computed);
+  let changed = false;
+  let keyCode = getReactNodeSource(source, keyNode);
+
+  if (!computed) {
+    const staticKey = getStaticPropertyKey(keyNode);
+    if (staticKey) {
+      const mapped = classToExpr.get(staticKey);
+      if (mapped) {
+        keyCode = `[${mapped}]`;
+        changed = true;
+      }
+    }
+  } else {
+    const rewrittenKey = rewriteReactExpression(
+      source,
+      keyNode,
+      classToExpr,
+      classHelpers,
+    );
+    keyCode = `[${rewrittenKey.code}]`;
+    changed ||= rewrittenKey.changed;
+  }
+
+  const rewrittenValue = rewriteReactExpression(
+    source,
+    valueNode,
+    classToExpr,
+    classHelpers,
+  );
+  changed ||= rewrittenValue.changed;
+
+  if (!changed) {
+    return preserveReactNode(source, property);
+  }
+
+  return {
+    changed: true,
+    code: `${keyCode}: ${rewrittenValue.code}`,
+  };
+}
+
+function rewriteReactExpression(
+  source: string,
+  expression: ReactAstNode,
+  classToExpr: Map<string, string>,
+  classHelpers: Set<string>,
+): RewriteResult {
+  switch (expression.type) {
+    case "StringLiteral": {
+      if (typeof expression.value !== "string") {
+        return preserveReactNode(source, expression);
+      }
+
+      return (
+        buildClassTokenExpression(expression.value, classToExpr) ??
+        preserveReactNode(source, expression)
+      );
+    }
+    case "TemplateLiteral": {
+      const quasis = Array.isArray(expression.quasis)
+        ? (expression.quasis as ReactAstNode[])
+        : [];
+      const expressions = Array.isArray(expression.expressions)
+        ? (expression.expressions as ReactAstNode[])
+        : [];
+      let changed = false;
+      let code = "`";
+
+      for (const [index, quasi] of quasis.entries()) {
+        const value = quasi.value as { cooked?: unknown } | undefined;
+        const rewrittenQuasi = rewriteTemplateText(
+          typeof value?.cooked === "string" ? value.cooked : "",
+          classToExpr,
+        );
+        code += rewrittenQuasi.code;
+        changed ||= rewrittenQuasi.changed;
+
+        const nestedExpression = expressions[index];
+        if (nestedExpression) {
+          const rewrittenExpression = rewriteReactExpression(
+            source,
+            nestedExpression,
+            classToExpr,
+            classHelpers,
+          );
+          code += `\${${rewrittenExpression.code}}`;
+          changed ||= rewrittenExpression.changed;
+        }
+      }
+
+      code += "`";
+
+      return changed ? { changed: true, code } : preserveReactNode(source, expression);
+    }
+    case "ConditionalExpression": {
+      const test = expression.test as ReactAstNode | undefined;
+      const consequent = expression.consequent as ReactAstNode | undefined;
+      const alternate = expression.alternate as ReactAstNode | undefined;
+      if (!test || !consequent || !alternate) {
+        return preserveReactNode(source, expression);
+      }
+
+      const rewrittenConsequent = rewriteReactExpression(
+        source,
+        consequent,
+        classToExpr,
+        classHelpers,
+      );
+      const rewrittenAlternate = rewriteReactExpression(
+        source,
+        alternate,
+        classToExpr,
+        classHelpers,
+      );
+
+      if (!rewrittenConsequent.changed && !rewrittenAlternate.changed) {
+        return preserveReactNode(source, expression);
+      }
+
+      return {
+        changed: true,
+        code: `${getReactNodeSource(source, test)} ? ${rewrittenConsequent.code} : ${rewrittenAlternate.code}`,
+      };
+    }
+    case "LogicalExpression": {
+      const left = expression.left as ReactAstNode | undefined;
+      const right = expression.right as ReactAstNode | undefined;
+      const operator =
+        typeof expression.operator === "string" ? expression.operator : "&&";
+      if (!left || !right) {
+        return preserveReactNode(source, expression);
+      }
+
+      const rewrittenLeft = rewriteReactExpression(
+        source,
+        left,
+        classToExpr,
+        classHelpers,
+      );
+      const rewrittenRight = rewriteReactExpression(
+        source,
+        right,
+        classToExpr,
+        classHelpers,
+      );
+
+      if (!rewrittenLeft.changed && !rewrittenRight.changed) {
+        return preserveReactNode(source, expression);
+      }
+
+      return {
+        changed: true,
+        code: `${rewrittenLeft.code} ${operator} ${rewrittenRight.code}`,
+      };
+    }
+    case "ArrayExpression": {
+      const elements = Array.isArray(expression.elements)
+        ? (expression.elements as Array<ReactAstNode | null>)
+        : [];
+      const rewrittenElements: string[] = [];
+      let changed = false;
+
+      for (const element of elements) {
+        if (!element) {
+          return preserveReactNode(source, expression);
+        }
+
+        if (element.type === "SpreadElement") {
+          const argument = element.argument as ReactAstNode | undefined;
+          if (!argument) {
+            return preserveReactNode(source, expression);
+          }
+
+          const rewrittenArgument = rewriteReactExpression(
+            source,
+            argument,
+            classToExpr,
+            classHelpers,
+          );
+          rewrittenElements.push(`...${rewrittenArgument.code}`);
+          changed ||= rewrittenArgument.changed;
+          continue;
+        }
+
+        const rewrittenElement = rewriteReactExpression(
+          source,
+          element,
+          classToExpr,
+          classHelpers,
+        );
+        rewrittenElements.push(rewrittenElement.code);
+        changed ||= rewrittenElement.changed;
+      }
+
+      if (!changed) {
+        return preserveReactNode(source, expression);
+      }
+
+      return {
+        changed: true,
+        code: `[${rewrittenElements.join(", ")}]`,
+      };
+    }
+    case "ObjectExpression": {
+      const properties = Array.isArray(expression.properties)
+        ? (expression.properties as ReactAstNode[])
+        : [];
+      const rewrittenProperties: string[] = [];
+      let changed = false;
+
+      for (const property of properties) {
+        if (property.type === "SpreadElement") {
+          const argument = property.argument as ReactAstNode | undefined;
+          if (!argument) {
+            return preserveReactNode(source, expression);
+          }
+
+          const rewrittenArgument = rewriteReactExpression(
+            source,
+            argument,
+            classToExpr,
+            classHelpers,
+          );
+          rewrittenProperties.push(`...${rewrittenArgument.code}`);
+          changed ||= rewrittenArgument.changed;
+          continue;
+        }
+
+        if (property.type !== "ObjectProperty") {
+          return preserveReactNode(source, expression);
+        }
+
+        const rewrittenProperty = rewriteReactObjectProperty(
+          source,
+          property,
+          classToExpr,
+          classHelpers,
+        );
+        rewrittenProperties.push(rewrittenProperty.code);
+        changed ||= rewrittenProperty.changed;
+      }
+
+      if (!changed) {
+        return preserveReactNode(source, expression);
+      }
+
+      return {
+        changed: true,
+        code: `{ ${rewrittenProperties.join(", ")} }`,
+      };
+    }
+    case "CallExpression": {
+      const callee = expression.callee as ReactAstNode | undefined;
+      if (
+        callee?.type !== "Identifier" ||
+        typeof callee.name !== "string" ||
+        !classHelpers.has(callee.name)
+      ) {
+        return preserveReactNode(source, expression);
+      }
+
+      const args = Array.isArray(expression.arguments)
+        ? (expression.arguments as ReactAstNode[])
+        : [];
+      const rewrittenArgs = args.map((arg) =>
+        rewriteReactExpression(source, arg, classToExpr, classHelpers),
+      );
+      if (!rewrittenArgs.some((result) => result.changed)) {
+        return preserveReactNode(source, expression);
+      }
+
+      return {
+        changed: true,
+        code: `${getReactNodeSource(source, callee)}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
+      };
+    }
+    case "ParenthesizedExpression": {
+      const nestedExpression = expression.expression as ReactAstNode | undefined;
+      if (!nestedExpression) {
+        return preserveReactNode(source, expression);
+      }
+
+      const rewrittenExpression = rewriteReactExpression(
+        source,
+        nestedExpression,
+        classToExpr,
+        classHelpers,
+      );
+      if (!rewrittenExpression.changed) {
+        return preserveReactNode(source, expression);
+      }
+
+      return {
+        changed: true,
+        code: `(${rewrittenExpression.code})`,
+      };
+    }
+    default: {
+      return preserveReactNode(source, expression);
+    }
+  }
+}
+
+function buildClassNameReplacement(
+  source: string,
+  valueNode: ReactAstNode,
+  classToExpr: Map<string, string>,
+  classHelpers: Set<string>,
+): Replacement | undefined {
+  if (typeof valueNode.start !== "number" || typeof valueNode.end !== "number") {
+    return undefined;
+  }
+
+  if (
+    valueNode.type === "StringLiteral" &&
+    typeof valueNode.value === "string"
+  ) {
+    const rewritten = buildClassTokenExpression(valueNode.value, classToExpr);
+    if (!rewritten) {
+      return undefined;
+    }
+
+    return {
+      start: valueNode.start,
+      end: valueNode.end,
+      value: `{${rewritten.code}}`,
+    };
+  }
+
+  if (valueNode.type !== "JSXExpressionContainer") {
+    return undefined;
+  }
+
+  const expression = valueNode.expression as ReactAstNode | undefined;
+  if (!expression) {
+    return undefined;
+  }
+
+  const rewritten = rewriteReactExpression(
+    source,
+    expression,
+    classToExpr,
+    classHelpers,
+  );
+  if (!rewritten.changed) {
+    return undefined;
+  }
+
+  return {
+    start: valueNode.start,
+    end: valueNode.end,
+    value: `{${rewritten.code}}`,
+  };
+}
+
+function applyReplacements(content: string, replacements: Replacement[]): string {
+  return [...replacements]
+    .sort((left, right) => right.start - left.start)
+    .reduce(
+      (current, replacement) =>
+        `${current.slice(0, replacement.start)}${replacement.value}${current.slice(replacement.end)}`,
+      content,
+    );
+}
+
+function rewriteReactClassNames(
+  content: string,
+  classToExpr: Map<string, string>,
+): string {
+  if (classToExpr.size === 0) {
+    return content;
+  }
+
+  try {
+    const ast = parse(content, {
+      sourceType: "module",
+      plugins: ["jsx", "typescript"],
+    });
+    const classHelpers = new Set(KNOWN_CLASS_HELPERS);
+    const replacements: Replacement[] = [];
+
+    walkReactAst(ast, (node) => {
+      if (node.type === "ImportDeclaration") {
+        collectReactClassHelpers(node, classHelpers);
+        return;
+      }
+
+      if (node.type !== "JSXAttribute") {
+        return;
+      }
+
+      const name = node.name as { name?: unknown; type?: unknown } | undefined;
+      if (name?.type !== "JSXIdentifier" || name.name !== "className") {
+        return;
+      }
+
+      const valueNode = node.value as ReactAstNode | undefined;
+      if (!valueNode) {
+        return;
+      }
+
+      const replacement = buildClassNameReplacement(
+        content,
+        valueNode,
+        classToExpr,
+        classHelpers,
+      );
+      if (replacement) {
+        replacements.push(replacement);
+      }
+    });
+
+    if (replacements.length === 0) {
+      return content;
+    }
+
+    return applyReplacements(content, replacements);
+  } catch {
+    return rewriteReactClassNameLiterals(content, classToExpr);
+  }
+}
+
 export async function applyMigrationSuggestions(
   root: string,
   suggestions: MigrationSuggestion[],
@@ -254,7 +899,9 @@ export async function applyMigrationSuggestions(
     for (const suggestion of suggestions) {
       const sourceDir = dirname(sourceFile);
       const oldImportPath = toImportPath(relative(sourceDir, suggestion.file));
-      const newImportPath = toImportPath(relative(sourceDir, suggestion.suggestedModuleFile));
+      const newImportPath = toImportPath(
+        relative(sourceDir, suggestion.suggestedModuleFile),
+      );
 
       content = replaceQuotedPath(content, oldImportPath, newImportPath);
 
@@ -264,7 +911,10 @@ export async function applyMigrationSuggestions(
         if (ensured.alias) {
           for (const className of suggestion.classNames) {
             if (!classToExpr.has(className)) {
-              classToExpr.set(className, toStyleAccess(ensured.alias, className));
+              classToExpr.set(
+                className,
+                toStyleAccess(ensured.alias, className),
+              );
             }
           }
         }
@@ -272,7 +922,7 @@ export async function applyMigrationSuggestions(
     }
 
     if (extension === ".tsx" || extension === ".jsx") {
-      content = rewriteReactClassNameLiterals(content, classToExpr);
+      content = rewriteReactClassNames(content, classToExpr);
     }
 
     if (content !== before) {
