@@ -159,4 +159,59 @@ describe("migrate helpers", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("should rewrite vue template classes when module style src is present", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "recss-core-migrate-vue-"));
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        [
+          ".card { color: red; }",
+          ".card-body { color: blue; }",
+          ".active { color: green; }",
+        ].join("\n"),
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.vue"),
+        [
+          "<template>",
+          '  <section class="card">',
+          '    <div class="card-body" :class="{ active: isActive }" />',
+          '    <footer :class="dynamicClass" />',
+          "  </section>",
+          "</template>",
+          "",
+          '<script setup lang="ts">',
+          "const isActive = true;",
+          'const dynamicClass = "runtime-generated";',
+          "</script>",
+          "",
+          '<style src="./card.scss"></style>',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.vue"),
+        "utf8",
+      );
+      expect(rewritten).toContain(
+        '<style module src="./card.module.scss"></style>',
+      );
+      expect(rewritten).toContain('<section :class="$style.card">');
+      expect(rewritten).toContain(
+        `<div :class='[$style["card-body"], { [$style.active]: isActive }]' />`,
+      );
+      expect(rewritten).toContain('<footer :class="dynamicClass" />');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
