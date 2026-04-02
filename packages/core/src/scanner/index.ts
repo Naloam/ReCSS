@@ -18,7 +18,12 @@ function classifySourceFiles(
       continue;
     }
 
-    if (file.endsWith(".jsx") || file.endsWith(".tsx")) {
+    if (
+      file.endsWith(".js") ||
+      file.endsWith(".jsx") ||
+      file.endsWith(".ts") ||
+      file.endsWith(".tsx")
+    ) {
       jsxFiles.push(file);
       continue;
     }

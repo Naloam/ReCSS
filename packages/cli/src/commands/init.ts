@@ -14,7 +14,7 @@ export default defineConfig({
     exclude: ["src/**/*.module.{css,scss}"],
   },
   sources: {
-    include: ["src/**/*.{vue,tsx,jsx,html}"],
+    include: ["src/**/*.{vue,tsx,jsx,ts,js,html}"],
     exclude: ["src/**/*.test.*", "src/**/*.spec.*"],
   },
   framework: "auto",

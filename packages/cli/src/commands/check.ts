@@ -22,14 +22,14 @@ function getSourceIncludeByFramework(framework: RecssFramework): string[] {
   }
 
   if (framework === "react") {
-    return ["**/*.{tsx,jsx}"];
+    return ["**/*.{tsx,jsx,ts,js}"];
   }
 
   if (framework === "html") {
     return ["**/*.html"];
   }
 
-  return ["**/*.{vue,tsx,jsx,html}"];
+  return ["**/*.{vue,tsx,jsx,ts,js,html}"];
 }
 
 export const checkCommand = defineCommand({

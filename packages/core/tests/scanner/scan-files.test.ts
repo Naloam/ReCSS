@@ -31,19 +31,29 @@ describe("scanFiles", () => {
       'export const C = () => <div className="a" />',
       "utf8",
     );
+    await writeFile(
+      join(root, "Theme.ts"),
+      'export function applyTheme(root: HTMLElement) { root.classList.add("a"); }',
+      "utf8",
+    );
+    await writeFile(
+      join(root, "Legacy.js"),
+      'export function mount(node) { node.className = "a"; }',
+      "utf8",
+    );
     await writeFile(join(root, "index.html"), '<div class="a"></div>', "utf8");
 
     const result = await scanFiles({
       root,
       cssInclude: ["**/*.{css,scss}"],
       cssExclude: [],
-      sourceInclude: ["**/*.{vue,tsx,jsx,html}"],
+      sourceInclude: ["**/*.{vue,tsx,jsx,ts,js,html}"],
       sourceExclude: [],
     });
 
     expect(result.cssFiles).toHaveLength(1);
     expect(result.vueFiles).toHaveLength(1);
-    expect(result.jsxFiles).toHaveLength(1);
+    expect(result.jsxFiles).toHaveLength(3);
     expect(result.htmlFiles).toHaveLength(1);
   });
 
@@ -74,7 +84,7 @@ describe("scanFiles", () => {
       root,
       cssInclude: ["**/*.{css,scss}"],
       cssExclude: [],
-      sourceInclude: ["**/*.{vue,tsx,jsx,html}"],
+      sourceInclude: ["**/*.{vue,tsx,jsx,ts,js,html}"],
       sourceExclude: [],
     });
 
