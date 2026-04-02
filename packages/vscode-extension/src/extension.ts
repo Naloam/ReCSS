@@ -1,4 +1,4 @@
-import { resolve, extname, basename } from "node:path";
+import { basename, resolve } from "node:path";
 
 import {
   analyzeProject,
@@ -8,24 +8,23 @@ import {
 import * as vscode from "vscode";
 
 import { createDiagnosticRecords } from "./diagnostics.js";
+import {
+  createRefreshRequest,
+  formatAnalysisFailureMessage,
+  formatClearDiagnosticsMessage,
+  formatNoWorkspaceMessage,
+  formatRefreshSummary,
+  isRelevantRefreshPath,
+  mergeRefreshRequests,
+  resolveRefreshTargets,
+  summarizeRefreshResults,
+  type RefreshRequest,
+  type WorkspaceRefreshResult,
+} from "./refresh.js";
 
 const DIAGNOSTIC_COLLECTION_NAME = "recss";
 const OUTPUT_CHANNEL_NAME = "ReCSS";
 const REFRESH_DEBOUNCE_MS = 150;
-const RELEVANT_EXTENSIONS = new Set([
-  ".css",
-  ".scss",
-  ".vue",
-  ".tsx",
-  ".jsx",
-  ".html",
-]);
-const RELEVANT_CONFIG_FILES = new Set([
-  "package.json",
-  "recss.config.ts",
-  "recss.config.js",
-  "recss.config.mjs",
-]);
 
 type FrameworkSetting = "config" | RecssFramework;
 
@@ -43,49 +42,105 @@ export function activate(context: vscode.ExtensionContext): void {
   const folderDiagnostics = new Map<string, string[]>();
   let refreshTimer: NodeJS.Timeout | undefined;
   let running = false;
-  let queuedReason: string | undefined;
+  let pendingRequest: RefreshRequest | undefined;
+  let queuedRequest: RefreshRequest | undefined;
 
-  const scheduleRefresh = (reason: string): void => {
+  const clearAllDiagnostics = (): void => {
+    diagnostics.clear();
+    folderDiagnostics.clear();
+  };
+
+  const scheduleRefresh = (request: RefreshRequest): void => {
+    pendingRequest = pendingRequest
+      ? mergeRefreshRequests(pendingRequest, request)
+      : request;
+
     if (refreshTimer) {
       clearTimeout(refreshTimer);
     }
 
     refreshTimer = setTimeout(() => {
-      void refreshAllWorkspaces(reason);
+      refreshTimer = undefined;
+
+      const nextRequest = pendingRequest;
+      pendingRequest = undefined;
+
+      if (nextRequest) {
+        void refreshWorkspaces(nextRequest);
+      }
     }, REFRESH_DEBOUNCE_MS);
   };
 
-  const refreshAllWorkspaces = async (reason: string): Promise<void> => {
+  const clearScheduledRefreshes = (): void => {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = undefined;
+    }
+
+    pendingRequest = undefined;
+    queuedRequest = undefined;
+  };
+
+  const refreshWorkspaces = async (request: RefreshRequest): Promise<void> => {
     if (running) {
-      queuedReason = reason;
+      queuedRequest = queuedRequest
+        ? mergeRefreshRequests(queuedRequest, request)
+        : request;
       return;
     }
 
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) {
-      diagnostics.clear();
-      folderDiagnostics.clear();
+      clearAllDiagnostics();
+      output.appendLine(formatNoWorkspaceMessage(request.reason));
+      return;
+    }
+
+    const requestedFolderKeys = resolveRefreshTargets(
+      request,
+      folders.map((folder) => folder.uri.toString()),
+    );
+    const requestedFolderSet = new Set(requestedFolderKeys);
+    const targetFolders = folders.filter((folder) =>
+      requestedFolderSet.has(folder.uri.toString()),
+    );
+
+    if (targetFolders.length === 0) {
       return;
     }
 
     running = true;
 
     try {
-      await Promise.all(
-        folders.map((folder) =>
-          refreshWorkspaceFolder(folder, diagnostics, folderDiagnostics, output),
-        ),
+      const results = await Promise.all(
+        targetFolders.map(async (folder): Promise<WorkspaceRefreshResult> => {
+          try {
+            return await refreshWorkspaceFolder(
+              folder,
+              diagnostics,
+              folderDiagnostics,
+            );
+          } catch (error) {
+            output.appendLine(
+              formatAnalysisFailureMessage(folder.name, request.reason, error),
+            );
+            return {
+              status: "failed",
+            };
+          }
+        }),
       );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      output.appendLine(`[recss] analysis failed (${reason}): ${message}`);
+
+      output.appendLine(
+        formatRefreshSummary(summarizeRefreshResults(request.reason, results)),
+      );
     } finally {
       running = false;
 
-      if (queuedReason) {
-        const nextReason = queuedReason;
-        queuedReason = undefined;
-        scheduleRefresh(nextReason);
+      if (queuedRequest) {
+        const nextRequest = queuedRequest;
+        queuedRequest = undefined;
+        scheduleRefresh(nextRequest);
       }
     }
   };
@@ -94,7 +149,12 @@ export function activate(context: vscode.ExtensionContext): void {
     diagnostics,
     output,
     vscode.commands.registerCommand("recss.refreshAnalysis", () => {
-      scheduleRefresh("manual-command");
+      scheduleRefresh(createRefreshRequest("manual-command"));
+    }),
+    vscode.commands.registerCommand("recss.clearDiagnostics", () => {
+      clearScheduledRefreshes();
+      clearAllDiagnostics();
+      output.appendLine(formatClearDiagnosticsMessage());
     }),
     vscode.workspace.onDidSaveTextDocument((document) => {
       const folder = vscode.workspace.getWorkspaceFolder(document.uri);
@@ -107,30 +167,37 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
 
-      if (!shouldRefreshForPath(document.uri.fsPath)) {
+      if (!isRelevantRefreshPath(document.uri.fsPath)) {
         return;
       }
 
-      scheduleRefresh(`save:${basename(document.uri.fsPath)}`);
+      scheduleRefresh(
+        createRefreshRequest(
+          `save:${basename(document.uri.fsPath)}`,
+          folder.uri.toString(),
+        ),
+      );
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("recss")) {
-        scheduleRefresh("configuration-change");
+        scheduleRefresh(createRefreshRequest("configuration-change"));
       }
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      scheduleRefresh("workspace-change");
+    vscode.workspace.onDidChangeWorkspaceFolders((event) => {
+      for (const folder of event.removed ?? []) {
+        clearFolderDiagnostics(folder.uri.toString(), diagnostics, folderDiagnostics);
+      }
+
+      scheduleRefresh(createRefreshRequest("workspace-change"));
     }),
     {
       dispose(): void {
-        if (refreshTimer) {
-          clearTimeout(refreshTimer);
-        }
+        clearScheduledRefreshes();
       },
     },
   );
 
-  scheduleRefresh("activation");
+  scheduleRefresh(createRefreshRequest("activation"));
 }
 
 export function deactivate(): void {}
@@ -139,15 +206,16 @@ async function refreshWorkspaceFolder(
   folder: vscode.WorkspaceFolder,
   diagnostics: vscode.DiagnosticCollection,
   folderDiagnostics: Map<string, string[]>,
-  output: vscode.OutputChannel,
-): Promise<void> {
+): Promise<WorkspaceRefreshResult> {
   const settings = getSettings(folder);
   const folderKey = folder.uri.toString();
 
   clearFolderDiagnostics(folderKey, diagnostics, folderDiagnostics);
 
   if (!settings.enabled) {
-    return;
+    return {
+      status: "skipped",
+    };
   }
 
   const config = await loadConfig(folder.uri.fsPath);
@@ -190,9 +258,12 @@ async function refreshWorkspaceFolder(
   }
 
   folderDiagnostics.set(folderKey, filesWithDiagnostics);
-  output.appendLine(
-    `[recss] ${folder.name}: ${result.unused.stats.unusedClasses} unused classes.`,
-  );
+
+  return {
+    status: "refreshed",
+    filesWithDiagnostics: filesWithDiagnostics.length,
+    unusedClasses: result.unused.stats.unusedClasses,
+  };
 }
 
 function clearFolderDiagnostics(
@@ -217,12 +288,4 @@ function getSettings(folder: vscode.WorkspaceFolder): ExtensionSettings {
     framework: config.get<FrameworkSetting>("framework", "config"),
     runOnSave: config.get<boolean>("runOnSave", true),
   };
-}
-
-function shouldRefreshForPath(filePath: string): boolean {
-  if (RELEVANT_CONFIG_FILES.has(basename(filePath))) {
-    return true;
-  }
-
-  return RELEVANT_EXTENSIONS.has(extname(filePath));
 }
