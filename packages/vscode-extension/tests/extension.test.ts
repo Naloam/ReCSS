@@ -31,7 +31,19 @@ const mockModules = vi.hoisted(() => {
   let codeActionProvider:
     | {
         provideCodeActions: (
-          document: { uri: MockUri },
+          document: {
+            getText(): string;
+            lineAt(line: number): {
+              range: {
+                end: Position;
+                start: Position;
+              };
+              text: string;
+            };
+            offsetAt(position: Position): number;
+            positionAt(offset: number): Position;
+            uri: MockUri;
+          },
           range: Range,
           context: {
             diagnostics: readonly Diagnostic[];
@@ -53,17 +65,49 @@ const mockModules = vi.hoisted(() => {
     dispose: vi.fn(),
   };
 
-  class Range {
+  class Position {
     constructor(
-      public readonly startLine: number,
-      public readonly startCharacter: number,
-      public readonly endLine: number,
-      public readonly endCharacter: number,
+      public readonly line: number,
+      public readonly character: number,
     ) {}
+  }
+
+  class Range {
+    readonly end: Position;
+    readonly start: Position;
+
+    constructor(
+      startOrLine: number | Position,
+      startCharacterOrEnd: number | Position,
+      endLine?: number,
+      endCharacter?: number,
+    ) {
+      if (
+        typeof startOrLine === "object" &&
+        startOrLine !== null &&
+        typeof (startOrLine as Position).line === "number" &&
+        typeof (startOrLine as Position).character === "number" &&
+        typeof startCharacterOrEnd === "object" &&
+        startCharacterOrEnd !== null &&
+        typeof (startCharacterOrEnd as Position).line === "number" &&
+        typeof (startCharacterOrEnd as Position).character === "number"
+      ) {
+        this.start = new Position(startOrLine.line, startOrLine.character);
+        this.end = new Position(
+          startCharacterOrEnd.line,
+          startCharacterOrEnd.character,
+        );
+        return;
+      }
+
+      this.start = new Position(startOrLine as number, startCharacterOrEnd as number);
+      this.end = new Position(endLine ?? 0, endCharacter ?? 0);
+    }
   }
 
   class Diagnostic {
     code?: string | number;
+    data?: unknown;
     source?: string;
 
     constructor(
@@ -79,12 +123,27 @@ const mockModules = vi.hoisted(() => {
     constructor(public readonly value: string) {}
   }
 
+  class WorkspaceEdit {
+    readonly entries: Array<{
+      range: Range;
+      uri: string;
+    }> = [];
+
+    delete(uri: MockUri, range: Range): void {
+      this.entries.push({
+        uri: uri.fsPath,
+        range,
+      });
+    }
+  }
+
   class CodeAction {
     command?: {
       command: string;
       title: string;
     };
     diagnostics?: Diagnostic[];
+    edit?: WorkspaceEdit;
 
     constructor(
       public readonly title: string,
@@ -107,6 +166,50 @@ const mockModules = vi.hoisted(() => {
     },
     state: {
       createUri,
+      createDocument(path: string, content: string) {
+        const lines = content.split("\n");
+        const lineOffsets: number[] = [];
+        let offset = 0;
+
+        for (const line of lines) {
+          lineOffsets.push(offset);
+          offset += line.length + 1;
+        }
+
+        return {
+          getText(): string {
+            return content;
+          },
+          lineAt(line: number) {
+            const text = lines[line] ?? "";
+            return {
+              range: {
+                end: new Position(line, text.length),
+                start: new Position(line, 0),
+              },
+              text,
+            };
+          },
+          offsetAt(position: Position): number {
+            return (lineOffsets[position.line] ?? 0) + position.character;
+          },
+          positionAt(targetOffset: number): Position {
+            for (let index = 0; index < lineOffsets.length; index += 1) {
+              const lineStart = lineOffsets[index] ?? 0;
+              const nextLineStart =
+                lineOffsets[index + 1] ?? content.length + 1;
+              if (targetOffset < nextLineStart) {
+                return new Position(index, targetOffset - lineStart);
+              }
+            }
+
+            const lastLine = Math.max(lines.length - 1, 0);
+            const lastOffset = lineOffsets[lastLine] ?? 0;
+            return new Position(lastLine, targetOffset - lastOffset);
+          },
+          uri: createUri(path),
+        };
+      },
       diagnosticCollection,
       emitConfigurationChange(affectsRecss: boolean): void {
         configurationListener?.({
@@ -131,7 +234,10 @@ const mockModules = vi.hoisted(() => {
         }
 
         return (codeActionProvider.provideCodeActions(
-          { uri: createUri("/workspace/app-a/src/styles/card.scss") },
+          this.createDocument(
+            "/workspace/app-a/src/styles/card.scss",
+            ".card {\n  color: red;\n}\n",
+          ),
           new Range(0, 0, 0, 5),
           { diagnostics },
         ) ?? []) as CodeAction[];
@@ -192,6 +298,7 @@ const mockModules = vi.hoisted(() => {
       DiagnosticSeverity: {
         Warning: 1,
       },
+      Position,
       languages: {
         createDiagnosticCollection: vi.fn(() => diagnosticCollection),
         registerCodeActionsProvider: vi.fn(
@@ -199,7 +306,19 @@ const mockModules = vi.hoisted(() => {
             _selector: unknown,
             provider: {
               provideCodeActions: (
-                document: { uri: MockUri },
+                document: {
+                  getText(): string;
+                  lineAt(line: number): {
+                    range: {
+                      end: Position;
+                      start: Position;
+                    };
+                    text: string;
+                  };
+                  offsetAt(position: Position): number;
+                  positionAt(offset: number): Position;
+                  uri: MockUri;
+                },
                 range: Range,
                 context: {
                   diagnostics: readonly Diagnostic[];
@@ -218,6 +337,7 @@ const mockModules = vi.hoisted(() => {
       Uri: {
         file: createUri,
       },
+      WorkspaceEdit,
       window: {
         createOutputChannel: vi.fn(() => outputChannel),
       },
@@ -393,15 +513,21 @@ describe("activate", () => {
       mockModules.vscode.DiagnosticSeverity.Warning,
     );
     diagnostic.code = "unused-class";
+    diagnostic.data = {
+      className: "card",
+      selector: ".card",
+    };
     diagnostic.source = "recss";
 
     const actions = mockModules.state.getCodeActions([diagnostic]);
 
     expect(actions.map((action) => action.title)).toEqual([
+      "ReCSS: Remove Unused Class Rule",
       "ReCSS: Refresh Analysis",
       "ReCSS: Clear Diagnostics",
     ]);
     expect(actions.map((action) => action.command?.command)).toEqual([
+      undefined,
       "recss.refreshAnalysis",
       "recss.clearDiagnostics",
     ]);

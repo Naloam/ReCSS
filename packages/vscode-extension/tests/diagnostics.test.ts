@@ -65,11 +65,13 @@ describe("createDiagnosticRecords", () => {
 
       expect(diagnostics.get(styleFile)).toEqual([
         {
+          className: "card-title",
           code: "unused-class",
           endColumn: 11,
           file: styleFile,
           line: 0,
           message: buildDiagnosticMessage("card-title"),
+          selector: ".card-title",
           source: "recss",
           startColumn: 0,
         },
