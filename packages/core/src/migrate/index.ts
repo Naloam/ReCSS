@@ -1,7 +1,8 @@
 import { copyFile, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 
-import { parse } from "@babel/parser";
+import { parse as parseBabel, parseExpression } from "@babel/parser";
+import { parse as parseVueSfc } from "@vue/compiler-sfc";
 
 import type { MigrationSuggestion } from "../types.js";
 
@@ -150,6 +151,10 @@ function replaceQuotedPath(
     .replace(doubleQuoted, `"${toPath}"`);
 }
 
+function hasQuotedPathReference(content: string, path: string): boolean {
+  return content.includes(`"${path}"`) || content.includes(`'${path}'`);
+}
+
 async function collectSourceFiles(root: string): Promise<string[]> {
   const queue: string[] = [root];
   const files: string[] = [];
@@ -194,6 +199,14 @@ function buildUnusedAlias(content: string): string {
   }
 
   return alias;
+}
+
+function toVueStyleAccess(className: string): string {
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(className)) {
+    return `$style.${className}`;
+  }
+
+  return `$style["${className}"]`;
 }
 
 function ensureModuleImportAlias(
@@ -824,7 +837,7 @@ function rewriteReactClassNames(
   }
 
   try {
-    const ast = parse(content, {
+    const ast = parseBabel(content, {
       sourceType: "module",
       plugins: ["jsx", "typescript"],
     });
@@ -872,6 +885,273 @@ function rewriteReactClassNames(
   }
 }
 
+type VueTemplateNode = {
+  branches?: unknown[];
+  children?: unknown[];
+  props?: unknown[];
+};
+
+type VueStaticClassAttribute = {
+  loc?: {
+    end?: { offset?: number };
+    start?: { offset?: number };
+  };
+  name: string;
+  type: number;
+  value?: {
+    content?: string;
+  };
+};
+
+type VueClassBindingDirective = {
+  arg?: {
+    content?: string;
+  };
+  exp?: {
+    content?: string;
+  };
+  loc?: {
+    end?: { offset?: number };
+    start?: { offset?: number };
+  };
+  name: string;
+  type: number;
+};
+
+function isVueStaticClassAttribute(
+  node: unknown,
+): node is VueStaticClassAttribute {
+  if (!node || typeof node !== "object") {
+    return false;
+  }
+
+  const candidate = node as { name?: string; type?: number };
+  return candidate.type === 6 && candidate.name === "class";
+}
+
+function isVueClassBindingDirective(
+  node: unknown,
+): node is VueClassBindingDirective {
+  if (!node || typeof node !== "object") {
+    return false;
+  }
+
+  const candidate = node as {
+    arg?: { content?: string };
+    name?: string;
+    type?: number;
+  };
+  return (
+    candidate.type === 7 &&
+    candidate.name === "bind" &&
+    candidate.arg?.content === "class"
+  );
+}
+
+function buildVueStaticClassExpression(
+  value: string,
+  classToExpr: Map<string, string>,
+): RewriteResult | undefined {
+  const tokens = splitClassTokens(value);
+  if (tokens.length === 0) {
+    return undefined;
+  }
+
+  const parts = tokens.map((token) => classToExpr.get(token) ?? `"${token}"`);
+  const changed = tokens.some((token) => classToExpr.has(token));
+  if (!changed) {
+    return undefined;
+  }
+
+  return {
+    changed: true,
+    code: parts.length === 1 ? parts[0] : `[${parts.join(", ")}]`,
+  };
+}
+
+function wrapVueBindingExpression(expression: string): string {
+  if (!expression.includes('"')) {
+    return `"${expression}"`;
+  }
+
+  if (!expression.includes("'")) {
+    return `'${expression}'`;
+  }
+
+  return `"${expression.replaceAll('"', "&quot;")}"`;
+}
+
+function getVueAttributeRange(
+  content: string,
+  node:
+    | VueClassBindingDirective
+    | VueStaticClassAttribute,
+): { end: number; start: number } | undefined {
+  const startOffset = node.loc?.start?.offset;
+  const endOffset = node.loc?.end?.offset;
+  if (typeof startOffset !== "number" || typeof endOffset !== "number") {
+    return undefined;
+  }
+
+  let start = startOffset;
+  if (start > 0 && /\s/u.test(content[start - 1] ?? "")) {
+    start -= 1;
+  }
+
+  return {
+    start,
+    end: endOffset,
+  };
+}
+
+function ensureVueModuleStyleBlock(content: string): string {
+  return content.replace(/<style\b([^>]*)>/gu, (full, attrs: string) => {
+    if (/(?:^|\s)module(?:\s|=|$)/u.test(attrs)) {
+      return full;
+    }
+
+    if (!/\bsrc=(["'])[^"'<>]+\.module\.(?:css|scss)\1/u.test(attrs)) {
+      return full;
+    }
+
+    return `<style module${attrs}>`;
+  });
+}
+
+function hasVueModuleStyleBlock(content: string): boolean {
+  const styleTags = content.match(/<style\b[^>]*>/gu) ?? [];
+
+  return styleTags.some(
+    (tag) =>
+      /(?:^|\s)module(?:\s|=|>)/u.test(tag) &&
+      /\bsrc=(["'])[^"'<>]+\.module\.(?:css|scss)\1/u.test(tag),
+  );
+}
+
+function rewriteVueBindingExpression(
+  expression: string,
+  classToExpr: Map<string, string>,
+): RewriteResult {
+  try {
+    const ast = parseExpression(expression, {
+      plugins: ["typescript"],
+    }) as unknown as ReactAstNode;
+
+    return rewriteReactExpression(
+      expression,
+      ast,
+      classToExpr,
+      new Set<string>(),
+    );
+  } catch {
+    return {
+      changed: false,
+      code: expression,
+    };
+  }
+}
+
+function rewriteVueClassBindings(
+  content: string,
+  classToExpr: Map<string, string>,
+): string {
+  if (classToExpr.size === 0 || !hasVueModuleStyleBlock(content)) {
+    return content;
+  }
+
+  try {
+    const sfc = parseVueSfc(content);
+    const ast = sfc.descriptor.template?.ast as VueTemplateNode | undefined;
+    if (!ast) {
+      return content;
+    }
+
+    const replacements: Replacement[] = [];
+    const stack: VueTemplateNode[] = [ast];
+
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current) {
+        continue;
+      }
+
+      const props = Array.isArray(current.props) ? current.props : [];
+      const staticClass = props.find(isVueStaticClassAttribute);
+      const bindingClass = props.find(isVueClassBindingDirective);
+
+      const staticRewrite =
+        staticClass && typeof staticClass.value?.content === "string"
+          ? buildVueStaticClassExpression(staticClass.value.content, classToExpr)
+          : undefined;
+      const bindingRewrite =
+        bindingClass && typeof bindingClass.exp?.content === "string"
+          ? rewriteVueBindingExpression(bindingClass.exp.content, classToExpr)
+          : undefined;
+
+      if (staticRewrite && bindingClass && typeof bindingClass.exp?.content === "string") {
+        const bindingRange = getVueAttributeRange(content, bindingClass);
+        const staticRange = staticClass
+          ? getVueAttributeRange(content, staticClass)
+          : undefined;
+
+        if (bindingRange && staticRange) {
+          const dynamicCode =
+            bindingRewrite?.code ?? bindingClass.exp.content;
+          replacements.push({
+            start: bindingRange.start,
+            end: bindingRange.end,
+            value: ` :class=${wrapVueBindingExpression(`[${staticRewrite.code}, ${dynamicCode}]`)}`,
+          });
+          replacements.push({
+            start: staticRange.start,
+            end: staticRange.end,
+            value: "",
+          });
+        }
+      } else if (staticRewrite && staticClass) {
+        const staticRange = getVueAttributeRange(content, staticClass);
+        if (staticRange) {
+          replacements.push({
+            start: staticRange.start,
+            end: staticRange.end,
+            value: ` :class=${wrapVueBindingExpression(staticRewrite.code)}`,
+          });
+        }
+      } else if (bindingRewrite?.changed && bindingClass) {
+        const bindingRange = getVueAttributeRange(content, bindingClass);
+        if (bindingRange) {
+          replacements.push({
+            start: bindingRange.start,
+            end: bindingRange.end,
+            value: ` :class=${wrapVueBindingExpression(bindingRewrite.code)}`,
+          });
+        }
+      }
+
+      const children = Array.isArray(current.children) ? current.children : [];
+      const branches = Array.isArray(current.branches) ? current.branches : [];
+      for (const child of children) {
+        if (child && typeof child === "object") {
+          stack.push(child as VueTemplateNode);
+        }
+      }
+      for (const branch of branches) {
+        if (branch && typeof branch === "object") {
+          stack.push(branch as VueTemplateNode);
+        }
+      }
+    }
+
+    if (replacements.length === 0) {
+      return content;
+    }
+
+    return applyReplacements(content, replacements);
+  } catch {
+    return content;
+  }
+}
+
 export async function applyMigrationSuggestions(
   root: string,
   suggestions: MigrationSuggestion[],
@@ -895,6 +1175,7 @@ export async function applyMigrationSuggestions(
     let content = await readFile(sourceFile, "utf8");
     const before = content;
     const classToExpr = new Map<string, string>();
+    const vueClassToExpr = new Map<string, string>();
 
     for (const suggestion of suggestions) {
       const sourceDir = dirname(sourceFile);
@@ -919,10 +1200,26 @@ export async function applyMigrationSuggestions(
           }
         }
       }
+
+      if (
+        extension === ".vue" &&
+        hasQuotedPathReference(content, newImportPath)
+      ) {
+        for (const className of suggestion.classNames) {
+          if (!vueClassToExpr.has(className)) {
+            vueClassToExpr.set(className, toVueStyleAccess(className));
+          }
+        }
+      }
     }
 
     if (extension === ".tsx" || extension === ".jsx") {
       content = rewriteReactClassNames(content, classToExpr);
+    }
+
+    if (extension === ".vue") {
+      content = ensureVueModuleStyleBlock(content);
+      content = rewriteVueClassBindings(content, vueClassToExpr);
     }
 
     if (content !== before) {
