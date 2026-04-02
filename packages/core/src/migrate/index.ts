@@ -11,6 +11,13 @@ import type { MigrationSuggestion } from "../types.js";
 
 const STYLE_EXTENSIONS = new Set([".css", ".scss"]);
 const KNOWN_CLASS_HELPERS = new Set(["clsx", "cn", "classnames"]);
+const DOM_CLASS_LIST_METHODS = new Set([
+  "add",
+  "contains",
+  "remove",
+  "replace",
+  "toggle",
+]);
 const REACT_SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".tsx"]);
 const SOURCE_EXTENSIONS = new Set([
   ".vue",
@@ -728,6 +735,17 @@ function getStaticPropertyKey(node: ReactAstNode): string | undefined {
   return undefined;
 }
 
+function isReactMemberExpression(
+  node: ReactAstNode | undefined,
+): node is ReactAstNode & {
+  type: "MemberExpression" | "OptionalMemberExpression";
+} {
+  return (
+    node?.type === "MemberExpression" ||
+    node?.type === "OptionalMemberExpression"
+  );
+}
+
 function getReactClassValueKind(expression: ReactAstNode): ReactExpressionKind {
   switch (expression.type) {
     case "ParenthesizedExpression": {
@@ -1386,6 +1404,137 @@ function buildClassNameReplacement(
   };
 }
 
+function buildReactExpressionReplacement(
+  source: string,
+  expression: ReactAstNode,
+  classToExpr: Map<string, string>,
+  classHelpers: Set<string>,
+  stringContext = false,
+): Replacement | undefined {
+  if (
+    typeof expression.start !== "number" ||
+    typeof expression.end !== "number"
+  ) {
+    return undefined;
+  }
+
+  const rewritten = rewriteReactExpression(
+    source,
+    expression,
+    classToExpr,
+    classHelpers,
+    stringContext,
+  );
+  if (!rewritten.changed) {
+    return undefined;
+  }
+
+  return {
+    start: expression.start,
+    end: expression.end,
+    value: rewritten.code,
+  };
+}
+
+function buildDomClassCallReplacement(
+  source: string,
+  expression: ReactAstNode,
+  classToExpr: Map<string, string>,
+  classHelpers: Set<string>,
+): Replacement | undefined {
+  const callee = expression.callee as ReactAstNode | undefined;
+  if (!isReactMemberExpression(callee)) {
+    return undefined;
+  }
+
+  const memberCallee = callee;
+  const propertyName = getStaticPropertyKey(
+    memberCallee.property as ReactAstNode,
+  );
+  const args = Array.isArray(expression.arguments)
+    ? (expression.arguments as ReactAstNode[])
+    : [];
+  const calleeObject = memberCallee.object as ReactAstNode | undefined;
+
+  if (
+    DOM_CLASS_LIST_METHODS.has(propertyName ?? "") &&
+    isReactMemberExpression(calleeObject) &&
+    getStaticPropertyKey(calleeObject.property as ReactAstNode) === "classList"
+  ) {
+    const rewrittenArgs = args.map((arg) =>
+      rewriteReactExpression(source, arg, classToExpr, classHelpers, false),
+    );
+
+    if (!rewrittenArgs.some((result) => result.changed)) {
+      return undefined;
+    }
+
+    const rewrittenCall = rewriteCallExpressionArguments(
+      source,
+      expression,
+      args,
+      rewrittenArgs,
+    );
+    if (!rewrittenCall) {
+      return undefined;
+    }
+
+    return {
+      start: expression.start ?? 0,
+      end: expression.end ?? 0,
+      value: rewrittenCall,
+    };
+  }
+
+  if (
+    propertyName !== "setAttribute" ||
+    args.length < 2 ||
+    args[0]?.type !== "StringLiteral" ||
+    (args[0].value !== "class" && args[0].value !== "className") ||
+    !args[1]
+  ) {
+    return undefined;
+  }
+
+  return buildReactExpressionReplacement(
+    source,
+    args[1],
+    classToExpr,
+    classHelpers,
+    true,
+  );
+}
+
+function buildDomClassAssignmentReplacement(
+  source: string,
+  expression: ReactAstNode,
+  classToExpr: Map<string, string>,
+  classHelpers: Set<string>,
+): Replacement | undefined {
+  if (expression.operator !== "=") {
+    return undefined;
+  }
+
+  const left = expression.left as ReactAstNode | undefined;
+  const right = expression.right as ReactAstNode | undefined;
+  const memberLeft = left;
+  if (
+    !isReactMemberExpression(memberLeft) ||
+    getStaticPropertyKey(memberLeft.property as ReactAstNode) !== "className" ||
+    !right
+  ) {
+    return undefined;
+  }
+
+  return buildReactExpressionReplacement(
+    source,
+    right,
+    classToExpr,
+    classHelpers,
+    true,
+  );
+}
+
 function applyReplacements(content: string, replacements: Replacement[]): string {
   return [...replacements]
     .sort((left, right) => right.start - left.start)
@@ -1472,6 +1621,32 @@ function rewriteReactClassNames(
     const replacements: Replacement[] = [];
 
     walkReactAst(ast, (node) => {
+      if (node.type === "CallExpression") {
+        const replacement = buildDomClassCallReplacement(
+          content,
+          node,
+          classToExpr,
+          classHelpers,
+        );
+        if (replacement) {
+          replacements.push(replacement);
+        }
+        return;
+      }
+
+      if (node.type === "AssignmentExpression") {
+        const replacement = buildDomClassAssignmentReplacement(
+          content,
+          node,
+          classToExpr,
+          classHelpers,
+        );
+        if (replacement) {
+          replacements.push(replacement);
+        }
+        return;
+      }
+
       if (node.type !== "JSXAttribute") {
         return;
       }

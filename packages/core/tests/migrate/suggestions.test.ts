@@ -192,6 +192,67 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should rewrite dom class apis in react js sources", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-dom-class-api-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.card-title { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.js"),
+        [
+          'import "./card.scss";',
+          "export function mountCard(node, element, active) {",
+          '  node.classList.add("card", "card-title");',
+          '  node.classList.contains("card");',
+          '  node.classList.toggle("card", active);',
+          '  node.classList.replace("card", "card-title");',
+          '  element.setAttribute("class", "card card-title");',
+          '  element.className = active ? "card" : "card-title";',
+          "}",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      const result = await applyMigrationSuggestions(root, suggestions);
+
+      expect(result.copiedFiles).toBe(1);
+      expect(result.updatedSourceFiles).toBe(1);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.js"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'node.classList.add(styles.card, styles["card-title"]);',
+      );
+      expect(rewritten).toContain("node.classList.contains(styles.card);");
+      expect(rewritten).toContain(
+        "node.classList.toggle(styles.card, active);",
+      );
+      expect(rewritten).toContain(
+        'node.classList.replace(styles.card, styles["card-title"]);',
+      );
+      expect(rewritten).toContain(
+        'element.setAttribute("class", [styles.card, styles["card-title"]].join(" "));',
+      );
+      expect(rewritten).toContain(
+        'element.className = active ? styles.card : styles["card-title"];',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should reuse existing react module imports and remove duplicate side-effect imports", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-existing-module-import-"),
