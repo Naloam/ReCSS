@@ -11,7 +11,7 @@ ReCSS is a focused TypeScript tool for CSS health analysis in large codebases. I
 
 ## Current Status
 
-Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with migration flow, Vite integration, and a minimal VSCode extension package.
+Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with migration flow, Vite integration, and a VSCode extension baseline with initial diagnostic quick fixes.
 
 ## Current Scope
 
@@ -23,7 +23,7 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 - Provide `recss init` to bootstrap config
 - Provide `recss migrate` for CSS Modules migration suggestions and apply flow
 - Provide `@recss/vite-plugin` for HMR-time warnings
-- Provide `@recss/vscode-extension` for inline unused-class diagnostics
+- Provide `@recss/vscode-extension` for inline unused-class diagnostics and basic diagnostic quick fixes
 
 ### `recss migrate --apply` support scope
 
@@ -64,7 +64,7 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 Deferred:
 
 - Deeper CSS Modules auto-rewrite coverage beyond the patterns above
-- Advanced VSCode extension interactions and quick fixes
+- Deeper VSCode source-editing quick fixes and code actions
 
 ## Workspace
 
