@@ -51,13 +51,13 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 | Array `:class` binding    | `:class="['foo', cond ? 'bar' : '']"`      |
 | Mixed static + dynamic    | `<div class="card" :class="{ active }">`   |
 | Custom style module alias | `<style module="classes">` uses `$classes` |
+| `useCssModule()` accessors | `<script setup>const styles = useCssModule()</script>` |
 
 **Limitations:**
 
 - This is **not** a general-purpose AST auto-migration tool. It covers the most common className patterns listed above.
 - Dynamic variable references (e.g., `className={someVar}`), function calls, and complex member expressions are detected as uncertain and left untouched.
 - Files that already use CSS Modules (`styles.xxx`) are skipped.
-- Vue files using `useCssModule()` are skipped.
 - Spread operators and deeply nested expressions may not be fully rewritten.
 - Only `.css` and `.scss` source files are processed.
 

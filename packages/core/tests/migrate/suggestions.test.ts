@@ -794,4 +794,102 @@ describe("migrate helpers", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("should use script setup useCssModule accessor for default vue module rewrites", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-vue-use-css-module-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.vue"),
+        [
+          "<template>",
+          '  <section class="card" :class="{ active: isActive }" />',
+          "</template>",
+          "",
+          '<script setup lang="ts">',
+          "const styles = useCssModule();",
+          "const isActive = true;",
+          "</script>",
+          "",
+          '<style src="./card.scss"></style>',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.vue"),
+        "utf8",
+      );
+      expect(rewritten).toContain(
+        '<style module src="./card.module.scss"></style>',
+      );
+      expect(rewritten).toContain(
+        `<section :class="[styles.card, { [styles.active]: isActive }]" />`,
+      );
+      expect(rewritten).not.toContain("$style.card");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("should use named useCssModule accessor for vue module alias rewrites", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-vue-use-css-module-alias-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.vue"),
+        [
+          "<template>",
+          '  <section class="card" :class="{ active: isActive }" />',
+          "</template>",
+          "",
+          '<script setup lang="ts">',
+          'const styles = useCssModule("classes");',
+          "const isActive = true;",
+          "</script>",
+          "",
+          '<style module="classes" src="./card.scss"></style>',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.vue"),
+        "utf8",
+      );
+      expect(rewritten).toContain(
+        '<style module="classes" src="./card.module.scss"></style>',
+      );
+      expect(rewritten).toContain(
+        `<section :class="[styles.card, { [styles.active]: isActive }]" />`,
+      );
+      expect(rewritten).not.toContain("$classes.card");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

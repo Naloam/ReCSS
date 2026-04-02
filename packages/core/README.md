@@ -28,7 +28,7 @@ Supported: string literals, template literals, clsx/cn/classnames calls, array l
 
 ### Vue SFC rewrite patterns
 
-Supported: static `class`, object `:class`, array `:class`, mixed static + dynamic bindings, and custom `<style module="alias">` references.
+Supported: static `class`, object `:class`, array `:class`, mixed static + dynamic bindings, custom `<style module="alias">` references, and template rewrites that follow `useCssModule()` accessors declared in `<script>` or `<script setup>`.
 
 ### Limitations
 

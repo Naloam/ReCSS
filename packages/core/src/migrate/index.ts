@@ -491,6 +491,57 @@ function collectClassHelpersFromModule(source: string): Set<string> {
   return helpers;
 }
 
+function collectUseCssModuleAccessorFromModule(
+  source: string,
+  moduleName: string,
+): string | undefined {
+  try {
+    const ast = parseBabel(source, {
+      sourceType: "module",
+      plugins: ["jsx", "typescript"],
+    });
+
+    let accessor: string | undefined;
+
+    walkReactAst(ast, (node) => {
+      if (accessor || node.type !== "VariableDeclarator") {
+        return;
+      }
+
+      const id = node.id as ReactAstNode | undefined;
+      const init = node.init as ReactAstNode | undefined;
+      if (!id || !init || id.type !== "Identifier") {
+        return;
+      }
+
+      if (init.type !== "CallExpression") {
+        return;
+      }
+
+      const callee = init.callee as ReactAstNode | undefined;
+      const args = Array.isArray(init.arguments)
+        ? (init.arguments as ReactAstNode[])
+        : [];
+      if (callee?.type !== "Identifier" || callee.name !== "useCssModule") {
+        return;
+      }
+
+      const requestedModuleName =
+        args[0]?.type === "StringLiteral" && typeof args[0].value === "string"
+          ? args[0].value
+          : "default";
+
+      if (requestedModuleName === moduleName) {
+        accessor = id.name;
+      }
+    });
+
+    return accessor;
+  } catch {
+    return undefined;
+  }
+}
+
 function escapeTemplateText(value: string): string {
   return value
     .replaceAll("\\", "\\\\")
@@ -1393,13 +1444,13 @@ function hasVueModuleStyleBlock(content: string): boolean {
   );
 }
 
-function getVueModuleAccessor(
+function getVueStyleModuleName(
   content: string,
   importPath: string,
 ): string | undefined {
   const escapedImportPath = escapeRegExp(importPath);
   const styleTagPattern = new RegExp(
-    `<style\\b[^>]*\\bmodule(?:\\s*=\\s*(["'])([^"']+)\\1)?[^>]*\\bsrc=(["'])${escapedImportPath}\\3[^>]*>`,
+    `<style\\b([^>]*)\\bsrc=(["'])${escapedImportPath}\\2[^>]*>`,
     "u",
   );
   const match = content.match(styleTagPattern);
@@ -1407,12 +1458,47 @@ function getVueModuleAccessor(
     return undefined;
   }
 
-  const alias = match[2];
-  if (typeof alias === "string" && alias.length > 0) {
-    return `$${alias}`;
+  const attributes = match[1] ?? "";
+  const aliasMatch = attributes.match(
+    /\bmodule(?:\s*=\s*(["'])([^"']+)\1)?/u,
+  );
+  if (aliasMatch?.[2]) {
+    return aliasMatch[2];
   }
 
-  return "$style";
+  return "default";
+}
+
+function getVueModuleAccessor(
+  content: string,
+  importPath: string,
+): string | undefined {
+  const moduleName = getVueStyleModuleName(content, importPath);
+  if (!moduleName) {
+    return undefined;
+  }
+
+  try {
+    const sfc = parseVueSfc(content);
+    const scriptContents = [
+      sfc.descriptor.script?.content,
+      sfc.descriptor.scriptSetup?.content,
+    ].filter((value): value is string => typeof value === "string");
+
+    for (const scriptContent of scriptContents) {
+      const accessor = collectUseCssModuleAccessorFromModule(
+        scriptContent,
+        moduleName,
+      );
+      if (accessor) {
+        return accessor;
+      }
+    }
+  } catch {
+    return moduleName === "default" ? "$style" : `$${moduleName}`;
+  }
+
+  return moduleName === "default" ? "$style" : `$${moduleName}`;
 }
 
 function rewriteVueBindingExpression(
