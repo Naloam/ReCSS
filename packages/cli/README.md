@@ -46,9 +46,10 @@ Suggests CSS Modules migration for a component directory. Pass `--apply` to exec
 | Array `:class` binding    | `:class="['foo', cond ? 'bar' : '']"`      |
 | Mixed static + dynamic    | `<div class="card" :class="{ active }">`   |
 | Custom style module alias | `<style module="classes">` uses `$classes` |
+| `useCssModule()` accessors | `<script setup>const styles = useCssModule()</script>` |
 
 ### Limitations
 
 - Not a general-purpose AST auto-migration tool — only the common patterns above are rewritten.
 - Dynamic variable references, function calls, and complex member expressions are left untouched.
-- Files already using CSS Modules (`styles.xxx`) or `useCssModule()` are skipped.
+- Files already using React CSS Modules member expressions (`styles.xxx`) are skipped.
