@@ -42,6 +42,8 @@ describe("renderMarkdownReport", () => {
 
     expect(output).toContain("# ReCSS Analysis Report");
     expect(output).toContain("| File | Line | Class | Selector |");
-    expect(output).toContain("| src/styles/card.scss | 12 | .card-ghost | .card-ghost |");
+    expect(output).toContain(
+      "| src/styles/card.scss | 12 | .card-ghost | .card-ghost |",
+    );
   });
 });

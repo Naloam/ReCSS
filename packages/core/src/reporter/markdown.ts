@@ -28,7 +28,10 @@ export function renderMarkdownReport(
     return lines.join("\n");
   }
 
-  lines.push("| File | Line | Class | Selector |", "| --- | ---: | --- | --- |");
+  lines.push(
+    "| File | Line | Class | Selector |",
+    "| --- | ---: | --- | --- |",
+  );
 
   for (const item of unused) {
     for (const definition of item.definitions) {
