@@ -48,6 +48,12 @@ type RewriteResult = {
   code: string;
 };
 
+type ReactModuleBindings = {
+  classHelpers: Set<string>;
+  reactFactories: Set<string>;
+  reactNamespaces: Set<string>;
+};
+
 type ReactExpressionKind =
   | "array"
   | "call"
@@ -517,9 +523,9 @@ function walkReactAst(
   }
 }
 
-function collectReactClassHelpers(
+function collectReactImportBindings(
   importNode: ReactAstNode,
-  helpers: Set<string>,
+  bindings: ReactModuleBindings,
 ): void {
   const source = importNode.source as { value?: unknown } | undefined;
   const importSource = typeof source?.value === "string" ? source.value : "";
@@ -535,14 +541,34 @@ function collectReactClassHelpers(
     }
 
     if (KNOWN_CLASS_HELPERS.has(localName)) {
-      helpers.add(localName);
+      bindings.classHelpers.add(localName);
     }
 
     if (
       specifier.type === "ImportDefaultSpecifier" &&
       (importSource === "clsx" || importSource === "classnames")
     ) {
-      helpers.add(localName);
+      bindings.classHelpers.add(localName);
+    }
+
+    if (importSource === "react") {
+      if (
+        specifier.type === "ImportDefaultSpecifier" ||
+        specifier.type === "ImportNamespaceSpecifier"
+      ) {
+        bindings.reactNamespaces.add(localName);
+        continue;
+      }
+
+      if (specifier.type === "ImportSpecifier") {
+        const importedName = getStaticPropertyKey(
+          specifier.imported as ReactAstNode,
+        );
+        if (importedName && REACT_FACTORY_METHODS.has(importedName)) {
+          bindings.reactFactories.add(localName);
+          continue;
+        }
+      }
     }
 
     if (specifier.type === "ImportSpecifier") {
@@ -551,7 +577,7 @@ function collectReactClassHelpers(
         typeof imported?.name === "string" &&
         KNOWN_CLASS_HELPERS.has(imported.name)
       ) {
-        helpers.add(localName);
+        bindings.classHelpers.add(localName);
       }
     }
   }
@@ -559,7 +585,7 @@ function collectReactClassHelpers(
 
 function collectRequireClassHelper(
   variableDeclarator: ReactAstNode,
-  helpers: Set<string>,
+  bindings: ReactModuleBindings,
 ): void {
   const id = variableDeclarator.id as ReactAstNode | undefined;
   const init = variableDeclarator.init as ReactAstNode | undefined;
@@ -585,12 +611,55 @@ function collectRequireClassHelper(
   }
 
   if (args[0].value === "clsx" || args[0].value === "classnames") {
-    helpers.add(id.name ?? "");
+    bindings.classHelpers.add(id.name ?? "");
   }
 }
 
-function collectClassHelpersFromModule(source: string): Set<string> {
-  const helpers = new Set(KNOWN_CLASS_HELPERS);
+function collectRequireReactBindings(
+  variableDeclarator: ReactAstNode,
+  bindings: ReactModuleBindings,
+): void {
+  const init = variableDeclarator.init as ReactAstNode | undefined;
+  if (getRequireCallSource(init) !== "react") {
+    return;
+  }
+
+  const id = variableDeclarator.id as ReactAstNode | undefined;
+  if (!id) {
+    return;
+  }
+
+  if (id.type === "Identifier" && typeof id.name === "string") {
+    bindings.reactNamespaces.add(id.name);
+    return;
+  }
+
+  if (id.type !== "ObjectPattern") {
+    return;
+  }
+
+  const properties = Array.isArray(id.properties)
+    ? (id.properties as ReactAstNode[])
+    : [];
+  for (const property of properties) {
+    if (Boolean(property.computed)) {
+      continue;
+    }
+
+    const importedName = getStaticPropertyKey(property.key as ReactAstNode);
+    const localName = getObjectPatternBindingName(property);
+    if (
+      importedName &&
+      localName &&
+      REACT_FACTORY_METHODS.has(importedName)
+    ) {
+      bindings.reactFactories.add(localName);
+    }
+  }
+}
+
+function collectReactModuleBindings(source: string): ReactModuleBindings {
+  const bindings = createReactModuleBindings();
 
   try {
     const ast = parseBabel(source, {
@@ -600,19 +669,24 @@ function collectClassHelpersFromModule(source: string): Set<string> {
 
     walkReactAst(ast, (node) => {
       if (node.type === "ImportDeclaration") {
-        collectReactClassHelpers(node, helpers);
+        collectReactImportBindings(node, bindings);
         return;
       }
 
       if (node.type === "VariableDeclarator") {
-        collectRequireClassHelper(node, helpers);
+        collectRequireClassHelper(node, bindings);
+        collectRequireReactBindings(node, bindings);
       }
     });
   } catch {
-    return helpers;
+    return bindings;
   }
 
-  return helpers;
+  return bindings;
+}
+
+function collectClassHelpersFromModule(source: string): Set<string> {
+  return collectReactModuleBindings(source).classHelpers;
 }
 
 function collectUseCssModuleAccessorFromModule(
@@ -707,6 +781,14 @@ function rewriteTemplateText(
   };
 }
 
+function createReactModuleBindings(): ReactModuleBindings {
+  return {
+    classHelpers: new Set(KNOWN_CLASS_HELPERS),
+    reactFactories: new Set<string>(),
+    reactNamespaces: new Set<string>(["React"]),
+  };
+}
+
 function flattenReactBinaryExpression(node: ReactAstNode): ReactAstNode[] {
   if (node.type !== "BinaryExpression" || node.operator !== "+") {
     return [node];
@@ -734,6 +816,53 @@ function getStaticPropertyKey(node: ReactAstNode): string | undefined {
   }
 
   return undefined;
+}
+
+function getRequireCallSource(node: ReactAstNode | undefined): string | undefined {
+  if (!node || node.type !== "CallExpression") {
+    return undefined;
+  }
+
+  const callee = node.callee as ReactAstNode | undefined;
+  const args = Array.isArray(node.arguments)
+    ? (node.arguments as ReactAstNode[])
+    : [];
+  if (
+    callee?.type !== "Identifier" ||
+    callee.name !== "require" ||
+    args[0]?.type !== "StringLiteral" ||
+    typeof args[0].value !== "string"
+  ) {
+    return undefined;
+  }
+
+  return args[0].value;
+}
+
+function getObjectPatternBindingName(
+  property: ReactAstNode,
+): string | undefined {
+  if (property.type !== "ObjectProperty") {
+    return undefined;
+  }
+
+  const valueNode = property.value as ReactAstNode | undefined;
+  if (!valueNode) {
+    return undefined;
+  }
+
+  if (valueNode.type === "Identifier" && typeof valueNode.name === "string") {
+    return valueNode.name;
+  }
+
+  if (valueNode.type !== "AssignmentPattern") {
+    return undefined;
+  }
+
+  const leftNode = valueNode.left as ReactAstNode | undefined;
+  return leftNode?.type === "Identifier" && typeof leftNode.name === "string"
+    ? leftNode.name
+    : undefined;
 }
 
 function isReactMemberExpression(
@@ -1536,19 +1665,31 @@ function buildDomClassAssignmentReplacement(
   );
 }
 
-function isReactFactoryCallExpression(expression: ReactAstNode): boolean {
+function isReactFactoryCallExpression(
+  expression: ReactAstNode,
+  reactNamespaces: Set<string>,
+  reactFactories: Set<string>,
+): boolean {
   const callee = expression.callee as ReactAstNode | undefined;
+  if (!callee) {
+    return false;
+  }
+
+  if (callee.type === "Identifier") {
+    return reactFactories.has(callee.name ?? "");
+  }
+
   if (!isReactMemberExpression(callee)) {
     return false;
   }
 
   const objectNode = callee.object as ReactAstNode | undefined;
-  if (objectNode?.type !== "Identifier" || objectNode.name !== "React") {
-    return false;
-  }
-
-  return REACT_FACTORY_METHODS.has(
-    getStaticPropertyKey(callee.property as ReactAstNode) ?? "",
+  return (
+    objectNode?.type === "Identifier" &&
+    reactNamespaces.has(objectNode.name ?? "") &&
+    REACT_FACTORY_METHODS.has(
+      getStaticPropertyKey(callee.property as ReactAstNode) ?? "",
+    )
   );
 }
 
@@ -1557,8 +1698,16 @@ function buildReactFactoryPropsReplacement(
   expression: ReactAstNode,
   classToExpr: Map<string, string>,
   classHelpers: Set<string>,
+  reactNamespaces: Set<string>,
+  reactFactories: Set<string>,
 ): Replacement | undefined {
-  if (!isReactFactoryCallExpression(expression)) {
+  if (
+    !isReactFactoryCallExpression(
+      expression,
+      reactNamespaces,
+      reactFactories,
+    )
+  ) {
     return undefined;
   }
 
@@ -1705,7 +1854,7 @@ function rewriteReactClassNames(
       sourceType: "module",
       plugins: ["jsx", "typescript"],
     });
-    const classHelpers = collectClassHelpersFromModule(content);
+    const bindings = collectReactModuleBindings(content);
     const replacements: Replacement[] = [];
 
     walkReactAst(ast, (node) => {
@@ -1714,7 +1863,7 @@ function rewriteReactClassNames(
           content,
           node,
           classToExpr,
-          classHelpers,
+          bindings.classHelpers,
         );
         if (domReplacement) {
           replacements.push(domReplacement);
@@ -1725,7 +1874,9 @@ function rewriteReactClassNames(
           content,
           node,
           classToExpr,
-          classHelpers,
+          bindings.classHelpers,
+          bindings.reactNamespaces,
+          bindings.reactFactories,
         );
         if (factoryReplacement) {
           replacements.push(factoryReplacement);
@@ -1738,7 +1889,7 @@ function rewriteReactClassNames(
           content,
           node,
           classToExpr,
-          classHelpers,
+          bindings.classHelpers,
         );
         if (replacement) {
           replacements.push(replacement);
@@ -1764,7 +1915,7 @@ function rewriteReactClassNames(
         content,
         valueNode,
         classToExpr,
-        classHelpers,
+        bindings.classHelpers,
       );
       if (replacement) {
         replacements.push(replacement);

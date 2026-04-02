@@ -80,6 +80,22 @@ function walkAst(node: unknown, visit: (node: AstNode) => void): void {
   }
 }
 
+function getStaticName(node: AstNode | undefined): string | undefined {
+  if (!node) {
+    return undefined;
+  }
+
+  if (node.type === "Identifier" && typeof node.name === "string") {
+    return node.name;
+  }
+
+  if (node.type === "StringLiteral" && typeof node.value === "string") {
+    return node.value;
+  }
+
+  return undefined;
+}
+
 function collectClassHelpers(importNode: AstNode, helpers: Set<string>): void {
   const source = importNode.source as { value?: unknown } | undefined;
   const importSource = typeof source?.value === "string" ? source.value : "";
@@ -113,6 +129,136 @@ function collectClassHelpers(importNode: AstNode, helpers: Set<string>): void {
       ) {
         helpers.add(localName);
       }
+    }
+  }
+}
+
+function collectReactImportBindings(
+  importNode: AstNode,
+  reactNamespaces: Set<string>,
+  reactFactories: Set<string>,
+): void {
+  const source = importNode.source as { value?: unknown } | undefined;
+  const importSource = typeof source?.value === "string" ? source.value : "";
+  if (importSource !== "react") {
+    return;
+  }
+
+  const specifiers = Array.isArray(importNode.specifiers)
+    ? (importNode.specifiers as AstNode[])
+    : [];
+
+  for (const specifier of specifiers) {
+    const local = specifier.local as { name?: unknown } | undefined;
+    const localName = typeof local?.name === "string" ? local.name : undefined;
+    if (!localName) {
+      continue;
+    }
+
+    if (
+      specifier.type === "ImportDefaultSpecifier" ||
+      specifier.type === "ImportNamespaceSpecifier"
+    ) {
+      reactNamespaces.add(localName);
+      continue;
+    }
+
+    if (specifier.type !== "ImportSpecifier") {
+      continue;
+    }
+
+    const importedName = getStaticName(
+      specifier.imported as AstNode | undefined,
+    );
+    if (importedName && REACT_FACTORY_METHODS.has(importedName)) {
+      reactFactories.add(localName);
+    }
+  }
+}
+
+function getRequireCallSource(node: AstNode | undefined): string | undefined {
+  if (!node || node.type !== "CallExpression") {
+    return undefined;
+  }
+
+  const callee = node.callee as AstNode | undefined;
+  const args = Array.isArray(node.arguments) ? (node.arguments as AstNode[]) : [];
+  if (
+    callee?.type !== "Identifier" ||
+    callee.name !== "require" ||
+    args[0]?.type !== "StringLiteral" ||
+    typeof args[0].value !== "string"
+  ) {
+    return undefined;
+  }
+
+  return args[0].value;
+}
+
+function getObjectPatternBindingName(property: AstNode): string | undefined {
+  if (property.type !== "ObjectProperty") {
+    return undefined;
+  }
+
+  const valueNode = property.value as AstNode | undefined;
+  if (!valueNode) {
+    return undefined;
+  }
+
+  if (valueNode.type === "Identifier" && typeof valueNode.name === "string") {
+    return valueNode.name;
+  }
+
+  if (valueNode.type !== "AssignmentPattern") {
+    return undefined;
+  }
+
+  const leftNode = valueNode.left as AstNode | undefined;
+  return leftNode?.type === "Identifier" && typeof leftNode.name === "string"
+    ? leftNode.name
+    : undefined;
+}
+
+function collectReactRequireBindings(
+  variableDeclarator: AstNode,
+  reactNamespaces: Set<string>,
+  reactFactories: Set<string>,
+): void {
+  const init = variableDeclarator.init as AstNode | undefined;
+  if (getRequireCallSource(init) !== "react") {
+    return;
+  }
+
+  const id = variableDeclarator.id as AstNode | undefined;
+  if (!id) {
+    return;
+  }
+
+  if (id.type === "Identifier" && typeof id.name === "string") {
+    reactNamespaces.add(id.name);
+    return;
+  }
+
+  if (id.type !== "ObjectPattern") {
+    return;
+  }
+
+  const properties = Array.isArray(id.properties)
+    ? (id.properties as AstNode[])
+    : [];
+  for (const property of properties) {
+    if (Boolean(property.computed)) {
+      continue;
+    }
+
+    const importedName = getStaticName(property.key as AstNode | undefined);
+    const localName = getObjectPatternBindingName(property);
+    if (
+      importedName &&
+      localName &&
+      REACT_FACTORY_METHODS.has(importedName)
+    ) {
+      reactFactories.add(localName);
     }
   }
 }
@@ -426,18 +572,30 @@ function collectFromDomClassAssignment(
   collectExpressionClasses(sourceCode, right, used, uncertain, classHelpers);
 }
 
-function isReactFactoryCall(callNode: AstNode): boolean {
+function isReactFactoryCall(
+  callNode: AstNode,
+  reactNamespaces: Set<string>,
+  reactFactories: Set<string>,
+): boolean {
   const callee = callNode.callee as AstNode | undefined;
-  if (!callee || callee.type !== "MemberExpression") {
+  if (!callee) {
+    return false;
+  }
+
+  if (callee.type === "Identifier") {
+    return reactFactories.has(callee.name ?? "");
+  }
+
+  if (callee.type !== "MemberExpression") {
     return false;
   }
 
   const objectNode = callee.object as AstNode | undefined;
-  if (objectNode?.type !== "Identifier" || objectNode.name !== "React") {
-    return false;
-  }
-
-  return REACT_FACTORY_METHODS.has(getMemberPropertyName(callee) ?? "");
+  return (
+    objectNode?.type === "Identifier" &&
+    reactNamespaces.has(objectNode.name ?? "") &&
+    REACT_FACTORY_METHODS.has(getMemberPropertyName(callee) ?? "")
+  );
 }
 
 function collectFromReactPropsObject(
@@ -488,8 +646,10 @@ function collectFromReactFactoryCall(
   used: Set<string>,
   uncertain: Set<string>,
   classHelpers: Set<string>,
+  reactNamespaces: Set<string>,
+  reactFactories: Set<string>,
 ): void {
-  if (!isReactFactoryCall(callNode)) {
+  if (!isReactFactoryCall(callNode, reactNamespaces, reactFactories)) {
     return;
   }
 
@@ -562,10 +722,17 @@ export function parseJsxCode(
     }) as unknown as AstNode;
 
     const classHelpers = new Set<string>(KNOWN_CLASS_HELPERS);
+    const reactNamespaces = new Set<string>(["React"]);
+    const reactFactories = new Set<string>();
 
     walkAst(ast, (node) => {
       if (node.type === "ImportDeclaration") {
         collectClassHelpers(node, classHelpers);
+        collectReactImportBindings(node, reactNamespaces, reactFactories);
+      }
+
+      if (node.type === "VariableDeclarator") {
+        collectReactRequireBindings(node, reactNamespaces, reactFactories);
       }
 
       if (node.type === "CallExpression") {
@@ -582,6 +749,8 @@ export function parseJsxCode(
           result.used,
           result.uncertain,
           classHelpers,
+          reactNamespaces,
+          reactFactories,
         );
       }
 
