@@ -39,6 +39,31 @@ describe("parseJsxCode", () => {
     expect(result.used.has("extra")).toBe(true);
   });
 
+  it("should extract classes from dom class apis", () => {
+    const result = parseJsxCode(
+      "/virtual/App.tsx",
+      [
+        "export function applyTheme(root, element) {",
+        '  root.classList.add("dark", "theme-ready");',
+        '  root.classList.toggle("contrast");',
+        '  root.classList.replace("old-theme", "new-theme");',
+        '  element.setAttribute("class", "shell shell-ready");',
+        '  element.className = active ? "is-active" : "is-idle";',
+        "}",
+      ].join("\n"),
+    );
+
+    expect(result.used.has("dark")).toBe(true);
+    expect(result.used.has("theme-ready")).toBe(true);
+    expect(result.used.has("contrast")).toBe(true);
+    expect(result.used.has("old-theme")).toBe(true);
+    expect(result.used.has("new-theme")).toBe(true);
+    expect(result.used.has("shell")).toBe(true);
+    expect(result.used.has("shell-ready")).toBe(true);
+    expect(result.used.has("is-active")).toBe(true);
+    expect(result.used.has("is-idle")).toBe(true);
+  });
+
   it("should skip css modules member expression", () => {
     const result = parseJsxCode(
       "/virtual/App.tsx",

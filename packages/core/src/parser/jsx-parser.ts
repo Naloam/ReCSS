@@ -13,6 +13,13 @@ type AstNode = {
 };
 
 const KNOWN_CLASS_HELPERS = new Set(["clsx", "cn", "classnames"]);
+const DOM_CLASS_LIST_METHODS = new Set([
+  "add",
+  "remove",
+  "toggle",
+  "contains",
+  "replace",
+]);
 
 function createEmptyResult(): SourceScanResult {
   return {
@@ -309,6 +316,115 @@ function collectExpressionClasses(
   }
 }
 
+function getMemberPropertyName(node: AstNode | undefined): string | undefined {
+  if (!node || node.type !== "MemberExpression") {
+    return undefined;
+  }
+
+  const property = node.property as AstNode | undefined;
+  if (!property) {
+    return undefined;
+  }
+
+  if (property.type === "Identifier" && typeof property.name === "string") {
+    return property.name;
+  }
+
+  if (property.type === "StringLiteral" && typeof property.value === "string") {
+    return property.value;
+  }
+
+  return undefined;
+}
+
+function isClassListAccess(node: AstNode | undefined): boolean {
+  return getMemberPropertyName(node) === "classList";
+}
+
+function collectFromDomClassCall(
+  sourceCode: string,
+  callNode: AstNode,
+  used: Set<string>,
+  uncertain: Set<string>,
+  classHelpers: Set<string>,
+): void {
+  const callee = callNode.callee as AstNode | undefined;
+  if (!callee || callee.type !== "MemberExpression") {
+    return;
+  }
+
+  const methodName = getMemberPropertyName(callee);
+  if (!methodName) {
+    return;
+  }
+
+  const args = Array.isArray(callNode.arguments)
+    ? (callNode.arguments as Array<AstNode | null>)
+    : [];
+
+  if (DOM_CLASS_LIST_METHODS.has(methodName) && isClassListAccess(callee.object as AstNode | undefined)) {
+    const relevantArgs =
+      methodName === "replace" ? args.slice(0, 2) : args;
+
+    for (const arg of relevantArgs) {
+      if (arg && arg.type !== "SpreadElement") {
+        collectExpressionClasses(
+          sourceCode,
+          arg,
+          used,
+          uncertain,
+          classHelpers,
+        );
+      }
+    }
+    return;
+  }
+
+  if (methodName !== "setAttribute" || args.length < 2) {
+    return;
+  }
+
+  const nameArg = args[0];
+  const valueArg = args[1];
+  if (
+    !nameArg ||
+    nameArg.type !== "StringLiteral" ||
+    (nameArg.value !== "class" && nameArg.value !== "className") ||
+    !valueArg ||
+    valueArg.type === "SpreadElement"
+  ) {
+    return;
+  }
+
+  collectExpressionClasses(
+    sourceCode,
+    valueArg,
+    used,
+    uncertain,
+    classHelpers,
+  );
+}
+
+function collectFromDomClassAssignment(
+  sourceCode: string,
+  assignmentNode: AstNode,
+  used: Set<string>,
+  uncertain: Set<string>,
+  classHelpers: Set<string>,
+): void {
+  const left = assignmentNode.left as AstNode | undefined;
+  const right = assignmentNode.right as AstNode | undefined;
+  if (!left || left.type !== "MemberExpression" || !right) {
+    return;
+  }
+
+  if (getMemberPropertyName(left) !== "className") {
+    return;
+  }
+
+  collectExpressionClasses(sourceCode, right, used, uncertain, classHelpers);
+}
+
 function collectFromClassNameAttribute(
   sourceCode: string,
   attributeNode: AstNode,
@@ -365,6 +481,26 @@ export function parseJsxCode(
     walkAst(ast, (node) => {
       if (node.type === "ImportDeclaration") {
         collectClassHelpers(node, classHelpers);
+      }
+
+      if (node.type === "CallExpression") {
+        collectFromDomClassCall(
+          sourceCode,
+          node,
+          result.used,
+          result.uncertain,
+          classHelpers,
+        );
+      }
+
+      if (node.type === "AssignmentExpression") {
+        collectFromDomClassAssignment(
+          sourceCode,
+          node,
+          result.used,
+          result.uncertain,
+          classHelpers,
+        );
       }
 
       if (node.type === "JSXAttribute") {
