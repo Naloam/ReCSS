@@ -626,6 +626,13 @@ export function parseVueCode(
   try {
     const sfc = parse(sourceCode, { filename: filePath });
 
+    if (
+      Array.isArray(sfc.descriptor.styles) &&
+      sfc.descriptor.styles.some((styleBlock) => Boolean(styleBlock?.module))
+    ) {
+      return result;
+    }
+
     const scriptContents = [
       sfc.descriptor.script?.content,
       sfc.descriptor.scriptSetup?.content,
