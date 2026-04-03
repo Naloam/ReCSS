@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import { parseExpression } from "@babel/parser";
+import { parse as parseBabel, parseExpression } from "@babel/parser";
 import { parse } from "@vue/compiler-sfc";
 
 import type { SourceScanResult } from "../types.js";
@@ -8,9 +8,13 @@ import type { SourceScanResult } from "../types.js";
 type BabelNode = {
   [key: string]: unknown;
   end?: number;
+  name?: string;
   start?: number;
   type: string;
+  value?: unknown;
 };
+
+const KNOWN_CLASS_HELPERS = new Set(["clsx", "cn", "classnames"]);
 
 function createEmptyResult(): SourceScanResult {
   return {
@@ -33,6 +37,210 @@ function getNodeSource(expression: string, node: BabelNode): string {
     return expression.slice(node.start, node.end);
   }
   return expression;
+}
+
+function walkAst(node: unknown, visit: (node: BabelNode) => void): void {
+  if (!node || typeof node !== "object") {
+    return;
+  }
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      walkAst(item, visit);
+    }
+    return;
+  }
+
+  if (!("type" in node)) {
+    return;
+  }
+
+  const astNode = node as BabelNode;
+  visit(astNode);
+
+  for (const value of Object.values(astNode)) {
+    if (!value || typeof value !== "object") {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        walkAst(child, visit);
+      }
+      continue;
+    }
+
+    walkAst(value, visit);
+  }
+}
+
+function getRequireCallSource(node: BabelNode | undefined): string | undefined {
+  if (!node || node.type !== "CallExpression") {
+    return undefined;
+  }
+
+  const callee = node.callee as BabelNode | undefined;
+  const args = Array.isArray(node.arguments) ? (node.arguments as BabelNode[]) : [];
+  if (
+    callee?.type !== "Identifier" ||
+    callee.name !== "require" ||
+    args[0]?.type !== "StringLiteral" ||
+    typeof args[0].value !== "string"
+  ) {
+    return undefined;
+  }
+
+  return args[0].value;
+}
+
+function getMemberPropertyName(node: BabelNode | undefined): string | undefined {
+  if (!node || node.type !== "MemberExpression") {
+    return undefined;
+  }
+
+  const property = node.property as BabelNode | undefined;
+  if (!property) {
+    return undefined;
+  }
+
+  if (property.type === "Identifier" && typeof property.name === "string") {
+    return property.name;
+  }
+
+  if (property.type === "StringLiteral" && typeof property.value === "string") {
+    return property.value;
+  }
+
+  return undefined;
+}
+
+function collectImportedClassHelpers(
+  importNode: BabelNode,
+  helpers: Set<string>,
+): void {
+  const source = importNode.source as { value?: unknown } | undefined;
+  const importSource = typeof source?.value === "string" ? source.value : "";
+  const specifiers = Array.isArray(importNode.specifiers)
+    ? (importNode.specifiers as BabelNode[])
+    : [];
+
+  for (const specifier of specifiers) {
+    const local = specifier.local as { name?: unknown } | undefined;
+    const localName = typeof local?.name === "string" ? local.name : undefined;
+    if (!localName) {
+      continue;
+    }
+
+    if (KNOWN_CLASS_HELPERS.has(localName)) {
+      helpers.add(localName);
+    }
+
+    if (
+      specifier.type === "ImportDefaultSpecifier" &&
+      (importSource === "clsx" || importSource === "classnames")
+    ) {
+      helpers.add(localName);
+    }
+
+    if (specifier.type !== "ImportSpecifier") {
+      continue;
+    }
+
+    const imported = specifier.imported as { name?: unknown } | undefined;
+    if (
+      typeof imported?.name === "string" &&
+      KNOWN_CLASS_HELPERS.has(imported.name)
+    ) {
+      helpers.add(localName);
+    }
+  }
+}
+
+function collectRequiredClassHelpers(
+  variableDeclarator: BabelNode,
+  helpers: Set<string>,
+): void {
+  const id = variableDeclarator.id as BabelNode | undefined;
+  const init = variableDeclarator.init as BabelNode | undefined;
+  if (
+    !id ||
+    !init ||
+    id.type !== "Identifier" ||
+    typeof id.name !== "string"
+  ) {
+    return;
+  }
+
+  const requireSource = getRequireCallSource(init);
+  if (requireSource === "clsx" || requireSource === "classnames") {
+    helpers.add(id.name);
+  }
+}
+
+function collectClassHelperAliases(
+  variableDeclarator: BabelNode,
+  helpers: Set<string>,
+): void {
+  const id = variableDeclarator.id as BabelNode | undefined;
+  const init = variableDeclarator.init as BabelNode | undefined;
+  if (
+    !id ||
+    !init ||
+    id.type !== "Identifier" ||
+    typeof id.name !== "string"
+  ) {
+    return;
+  }
+
+  if (init.type === "Identifier" && helpers.has(init.name ?? "")) {
+    helpers.add(id.name);
+    return;
+  }
+
+  if (init.type !== "CallExpression") {
+    return;
+  }
+
+  const callee = init.callee as BabelNode | undefined;
+  if (!callee || callee.type !== "MemberExpression") {
+    return;
+  }
+
+  const objectNode = callee.object as BabelNode | undefined;
+  if (
+    objectNode?.type === "Identifier" &&
+    helpers.has(objectNode.name ?? "") &&
+    getMemberPropertyName(callee) === "bind"
+  ) {
+    helpers.add(id.name);
+  }
+}
+
+function collectClassHelpersFromScript(sourceCode: string): Set<string> {
+  const helpers = new Set<string>(KNOWN_CLASS_HELPERS);
+
+  try {
+    const ast = parseBabel(sourceCode, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    });
+
+    walkAst(ast, (node) => {
+      if (node.type === "ImportDeclaration") {
+        collectImportedClassHelpers(node, helpers);
+        return;
+      }
+
+      if (node.type === "VariableDeclarator") {
+        collectRequiredClassHelpers(node, helpers);
+        collectClassHelperAliases(node, helpers);
+      }
+    });
+  } catch {
+    return helpers;
+  }
+
+  return helpers;
 }
 
 function isClassBindingDirective(node: unknown): node is {
@@ -75,6 +283,7 @@ function collectFromExpression(
   node: BabelNode,
   used: Set<string>,
   uncertain: Set<string>,
+  classHelpers: Set<string>,
 ): void {
   switch (node.type) {
     case "StringLiteral": {
@@ -98,7 +307,7 @@ function collectFromExpression(
         ? (node.expressions as BabelNode[])
         : [];
       for (const child of expressions) {
-        collectFromExpression(expression, child, used, uncertain);
+        collectFromExpression(expression, child, used, uncertain, classHelpers);
       }
       return;
     }
@@ -108,7 +317,13 @@ function collectFromExpression(
         : [];
       for (const element of elements) {
         if (element) {
-          collectFromExpression(expression, element, used, uncertain);
+          collectFromExpression(
+            expression,
+            element,
+            used,
+            uncertain,
+            classHelpers,
+          );
         }
       }
       return;
@@ -137,12 +352,24 @@ function collectFromExpression(
 
           const valueNode = property.value as BabelNode | undefined;
           if (valueNode) {
-            collectFromExpression(expression, valueNode, used, uncertain);
+            collectFromExpression(
+              expression,
+              valueNode,
+              used,
+              uncertain,
+              classHelpers,
+            );
           }
         } else if (property.type === "SpreadElement") {
           const argument = property.argument as BabelNode | undefined;
           if (argument) {
-            collectFromExpression(expression, argument, used, uncertain);
+            collectFromExpression(
+              expression,
+              argument,
+              used,
+              uncertain,
+              classHelpers,
+            );
           }
         }
       }
@@ -152,10 +379,22 @@ function collectFromExpression(
       const consequent = node.consequent as BabelNode | undefined;
       const alternate = node.alternate as BabelNode | undefined;
       if (consequent) {
-        collectFromExpression(expression, consequent, used, uncertain);
+        collectFromExpression(
+          expression,
+          consequent,
+          used,
+          uncertain,
+          classHelpers,
+        );
       }
       if (alternate) {
-        collectFromExpression(expression, alternate, used, uncertain);
+        collectFromExpression(
+          expression,
+          alternate,
+          used,
+          uncertain,
+          classHelpers,
+        );
       }
       return;
     }
@@ -163,10 +402,10 @@ function collectFromExpression(
       const left = node.left as BabelNode | undefined;
       const right = node.right as BabelNode | undefined;
       if (left) {
-        collectFromExpression(expression, left, used, uncertain);
+        collectFromExpression(expression, left, used, uncertain, classHelpers);
       }
       if (right) {
-        collectFromExpression(expression, right, used, uncertain);
+        collectFromExpression(expression, right, used, uncertain, classHelpers);
       }
       return;
     }
@@ -177,9 +416,35 @@ function collectFromExpression(
       return;
     }
     case "MemberExpression":
-    case "OptionalMemberExpression":
+    case "OptionalMemberExpression": {
+      uncertain.add(getNodeSource(expression, node));
+      return;
+    }
     case "CallExpression":
     case "OptionalCallExpression": {
+      const callee = node.callee as BabelNode | undefined;
+      if (
+        callee?.type === "Identifier" &&
+        typeof callee.name === "string" &&
+        classHelpers.has(callee.name)
+      ) {
+        const args = Array.isArray(node.arguments)
+          ? (node.arguments as Array<BabelNode | null>)
+          : [];
+        for (const arg of args) {
+          if (arg && arg.type !== "SpreadElement") {
+            collectFromExpression(
+              expression,
+              arg,
+              used,
+              uncertain,
+              classHelpers,
+            );
+          }
+        }
+        return;
+      }
+
       uncertain.add(getNodeSource(expression, node));
       return;
     }
@@ -188,22 +453,24 @@ function collectFromExpression(
       for (const child of children) {
         if (child && typeof child === "object" && "type" in child) {
           collectFromExpression(
-            expression,
-            child as BabelNode,
-            used,
-            uncertain,
-          );
-        } else if (Array.isArray(child)) {
-          for (const item of child) {
-            if (item && typeof item === "object" && "type" in item) {
-              collectFromExpression(
-                expression,
-                item as BabelNode,
-                used,
-                uncertain,
-              );
+              expression,
+              child as BabelNode,
+              used,
+              uncertain,
+              classHelpers,
+            );
+          } else if (Array.isArray(child)) {
+            for (const item of child) {
+              if (item && typeof item === "object" && "type" in item) {
+                collectFromExpression(
+                  expression,
+                  item as BabelNode,
+                  used,
+                  uncertain,
+                  classHelpers,
+                );
+              }
             }
-          }
         }
       }
     }
@@ -213,6 +480,7 @@ function collectFromExpression(
 function collectTemplateClasses(
   templateContent: string,
   result: SourceScanResult,
+  classHelpers: Set<string>,
 ): void {
   const sfc = parse(`<template>${templateContent}</template>`);
   const ast = sfc.descriptor.template?.ast;
@@ -252,6 +520,7 @@ function collectTemplateClasses(
             expressionAst,
             result.used,
             result.uncertain,
+            classHelpers,
           );
         } catch {
           result.uncertain.add(prop.exp.content);
@@ -294,9 +563,20 @@ export function parseVueCode(
       return result;
     }
 
+    const classHelpers = new Set<string>(KNOWN_CLASS_HELPERS);
+    const scriptContents = [
+      sfc.descriptor.script?.content,
+      sfc.descriptor.scriptSetup?.content,
+    ].filter((value): value is string => typeof value === "string");
+    for (const scriptContent of scriptContents) {
+      for (const helper of collectClassHelpersFromScript(scriptContent)) {
+        classHelpers.add(helper);
+      }
+    }
+
     const templateContent = sfc.descriptor.template?.content;
     if (templateContent) {
-      collectTemplateClasses(templateContent, result);
+      collectTemplateClasses(templateContent, result, classHelpers);
     }
 
     return result;

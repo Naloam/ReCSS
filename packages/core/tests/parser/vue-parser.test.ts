@@ -45,6 +45,41 @@ describe("parseVueCode", () => {
     expect(result.used.has("dynamic")).toBe(true);
   });
 
+  it("should extract class names from vue class helper calls", () => {
+    const result = parseVueCode(
+      "/virtual/App.vue",
+      [
+        "<template>",
+        `  <div :class="clsx('card', active && 'active')"></div>`,
+        "</template>",
+        '<script setup lang="ts">',
+        'import clsx from "clsx";',
+        "</script>",
+      ].join("\n"),
+    );
+
+    expect(result.used.has("card")).toBe(true);
+    expect(result.used.has("active")).toBe(true);
+  });
+
+  it("should extract class names from vue class helper aliases", () => {
+    const result = parseVueCode(
+      "/virtual/App.vue",
+      [
+        "<template>",
+        `  <div :class="cx('card', isReady && 'is-ready')"></div>`,
+        "</template>",
+        '<script setup lang="ts">',
+        'import clsx from "clsx";',
+        "const cx = clsx.bind(null);",
+        "</script>",
+      ].join("\n"),
+    );
+
+    expect(result.used.has("card")).toBe(true);
+    expect(result.used.has("is-ready")).toBe(true);
+  });
+
   it("should put pure variable class binding into uncertain set", () => {
     const result = parseVueCode(
       "/virtual/App.vue",
