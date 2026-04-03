@@ -74,6 +74,24 @@ type RuleBounds = {
   ruleStart: number;
 };
 
+function resolveSelectorListStartLine(
+  document: vscode.TextDocument,
+  line: number,
+): number {
+  let startLine = line;
+
+  while (startLine > 0) {
+    const previousText = document.lineAt(startLine - 1).text.trimEnd();
+    if (!previousText.endsWith(",")) {
+      break;
+    }
+
+    startLine -= 1;
+  }
+
+  return startLine;
+}
+
 function splitSelectorList(selectorText: string): SelectorSlice[] {
   const selectors: SelectorSlice[] = [];
   let quote: '"' | "'" | undefined;
@@ -161,8 +179,12 @@ function resolveRuleBounds(
   }
 
   const content = document.getText();
+  const ruleStartLine = resolveSelectorListStartLine(
+    document,
+    diagnostic.range.start.line,
+  );
   const ruleStart = document.offsetAt(
-    new vscode.Position(diagnostic.range.start.line, 0),
+    new vscode.Position(ruleStartLine, 0),
   );
   const selectorStart = document.offsetAt(diagnostic.range.start);
   const blockStart = content.indexOf("{", selectorStart);

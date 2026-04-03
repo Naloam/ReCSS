@@ -377,6 +377,134 @@ describe("createDiagnosticCodeActions", () => {
     ]);
   });
 
+  it("should remove selectors from multi-line selector lists", () => {
+    const actions = createDiagnosticCodeActions(
+      createMockDocument(
+        [".card,", ".card-title,", ".card-footer {", "  color: red;", "}", ""].join(
+          "\n",
+        ),
+      ) as never,
+      {
+        diagnostics: [
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card-title",
+              selector: ".card-title",
+            },
+            message: 'Unused CSS class ".card-title" is not referenced.',
+            range: {
+              end: {
+                character: 11,
+                line: 1,
+              },
+              start: {
+                character: 0,
+                line: 1,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+        ],
+      } as never,
+    );
+
+    expect(actions).toHaveLength(3);
+    expect(actions[0]).toMatchObject({
+      title: REMOVE_UNUSED_CLASS_SELECTOR_TITLE,
+    });
+    expect(actions[0]?.edit?.entries).toEqual([
+      {
+        range: {
+          end: {
+            character: 11,
+            line: 1,
+          },
+          start: {
+            character: 5,
+            line: 0,
+          },
+        },
+        uri: "/workspace/app-a/src/styles/card.scss",
+      },
+    ]);
+  });
+
+  it("should bulk-remove full multi-line selector lists when all entries are unused", () => {
+    const actions = createDiagnosticCodeActions(
+      createMockDocument(
+        [".card,", ".card-title {", "  color: red;", "}", ""].join("\n"),
+      ) as never,
+      {
+        diagnostics: [
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card",
+              selector: ".card",
+            },
+            message: 'Unused CSS class ".card" is not referenced.',
+            range: {
+              end: {
+                character: 5,
+                line: 0,
+              },
+              start: {
+                character: 0,
+                line: 0,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card-title",
+              selector: ".card-title",
+            },
+            message: 'Unused CSS class ".card-title" is not referenced.',
+            range: {
+              end: {
+                character: 11,
+                line: 1,
+              },
+              start: {
+                character: 0,
+                line: 1,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+        ],
+      } as never,
+    );
+
+    expect(actions.map((action) => action.title)).toEqual([
+      REMOVE_UNUSED_CLASS_SELECTOR_TITLE,
+      REMOVE_ALL_UNUSED_SELECTORS_TITLE,
+      "ReCSS: Refresh Analysis",
+      "ReCSS: Clear Diagnostics",
+    ]);
+    expect(actions[1]?.edit?.entries).toEqual([
+      {
+        range: {
+          end: {
+            character: 0,
+            line: 4,
+          },
+          start: {
+            character: 0,
+            line: 0,
+          },
+        },
+        uri: "/workspace/app-a/src/styles/card.scss",
+      },
+    ]);
+  });
+
   it("should provide a bulk remove action for non-overlapping selectors", () => {
     const actions = createDiagnosticCodeActions(
       createMockDocument(
