@@ -1,6 +1,6 @@
 {
   "name": "recss-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Core analysis engine for ReCSS.",
   "license": "MIT",
   "type": "module",

@@ -79,8 +79,12 @@ export type UnusedAnalysisResult = {
   skipped: string[];
   stats: {
     totalCssClasses: number;
+    referencedClasses?: number;
+    usedCssClasses?: number;
     usedClasses: number;
     unusedClasses: number;
+    uncertainReferences?: number;
+    uncertainCssClasses?: number;
     uncertainClasses: number;
     safelistedClasses: number;
   };

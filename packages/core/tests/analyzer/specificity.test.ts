@@ -66,6 +66,85 @@ function createCssResult(): CssParseResult {
   ]);
 }
 
+function createPseudoVariantCssResult(): CssParseResult {
+  return new Map([
+    [
+      "card",
+      [
+        {
+          name: "card",
+          selector: ".card",
+          file: "/virtual/card.scss",
+          line: 1,
+          column: 1,
+          specificity: [0, 1, 0],
+          properties: ["box-shadow"],
+          declarations: [
+            {
+              property: "box-shadow",
+              value: "var(--shadow-card)",
+              important: false,
+            },
+          ],
+        },
+        {
+          name: "card",
+          selector: ".card:hover",
+          file: "/virtual/card.scss",
+          line: 5,
+          column: 1,
+          specificity: [0, 2, 0],
+          properties: ["box-shadow"],
+          declarations: [
+            {
+              property: "box-shadow",
+              value: "var(--shadow-card-hover)",
+              important: false,
+            },
+          ],
+        },
+      ],
+    ],
+    [
+      "paper-edge",
+      [
+        {
+          name: "paper-edge",
+          selector: ".paper-edge",
+          file: "/virtual/paper.scss",
+          line: 1,
+          column: 1,
+          specificity: [0, 1, 0],
+          properties: ["position"],
+          declarations: [
+            {
+              property: "position",
+              value: "relative",
+              important: false,
+            },
+          ],
+        },
+        {
+          name: "paper-edge",
+          selector: ".paper-edge::before",
+          file: "/virtual/paper.scss",
+          line: 5,
+          column: 1,
+          specificity: [0, 1, 1],
+          properties: ["position"],
+          declarations: [
+            {
+              property: "position",
+              value: "absolute",
+              important: false,
+            },
+          ],
+        },
+      ],
+    ],
+  ]);
+}
+
 describe("analyzeSpecificity", () => {
   it("should detect conflicts when same class property has different specificity", () => {
     const result = analyzeSpecificity(createCssResult());
@@ -81,5 +160,12 @@ describe("analyzeSpecificity", () => {
 
     expect(result.stats.importantCount).toBe(1);
     expect(result.importantUsage[0]?.name).toBe("alert");
+  });
+
+  it("should ignore pseudo-class and pseudo-element variants when checking conflicts", () => {
+    const result = analyzeSpecificity(createPseudoVariantCssResult());
+
+    expect(result.stats.totalConflicts).toBe(0);
+    expect(result.conflicts).toEqual([]);
   });
 });

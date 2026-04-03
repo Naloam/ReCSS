@@ -28,14 +28,18 @@ export function analyzeUnused(
   const unused: UnusedClass[] = [];
   const skipped: string[] = [];
 
+  let usedCssClasses = 0;
   let safelistedClasses = 0;
+  let uncertainCssClasses = 0;
 
   for (const [className, definitions] of cssResult.entries()) {
     if (usedClasses.has(className)) {
+      usedCssClasses += 1;
       continue;
     }
 
     if (uncertainClasses.has(className)) {
+      uncertainCssClasses += 1;
       skipped.push(className);
       continue;
     }
@@ -57,8 +61,12 @@ export function analyzeUnused(
     skipped,
     stats: {
       totalCssClasses: cssResult.size,
+      referencedClasses: usedClasses.size,
+      usedCssClasses,
       usedClasses: usedClasses.size,
       unusedClasses: unused.length,
+      uncertainReferences: uncertainClasses.size,
+      uncertainCssClasses,
       uncertainClasses: uncertainClasses.size,
       safelistedClasses,
     },

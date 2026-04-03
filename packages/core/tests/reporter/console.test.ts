@@ -34,8 +34,10 @@ describe("renderConsoleReport", () => {
     });
 
     expect(output).toContain("ReCSS Analysis Report");
+    expect(output).toContain("Referenced classes");
+    expect(output).toContain("Used CSS classes");
     expect(output).toContain("src/styles/card.scss");
     expect(output).toContain(".card-ghost");
-    expect(output).toContain("Unused classes");
+    expect(output).toContain("Unused Classes");
   });
 });

@@ -41,6 +41,8 @@ describe("renderHtmlReport", () => {
     });
 
     expect(output).toContain("<title>ReCSS Analysis Report</title>");
+    expect(output).toContain("Referenced Classes");
+    expect(output).toContain("Used CSS Classes");
     expect(output).toContain("src/styles/card.scss");
     expect(output).toContain(".card&lt;ghost&gt;");
     expect(output).toContain("Unused Classes");

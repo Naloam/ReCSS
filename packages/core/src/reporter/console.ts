@@ -1,6 +1,7 @@
 import { relative } from "node:path";
 
 import type { AnalysisResult, UnusedClass } from "../types.js";
+import { getDisplayStats } from "./stats.js";
 
 function colorRed(value: string): string {
   return `\u001b[31m${value}\u001b[39m`;
@@ -57,7 +58,7 @@ export function renderConsoleReport(
   root: string,
   result: AnalysisResult,
 ): string {
-  const { stats } = result.unused;
+  const stats = getDisplayStats(result.unused.stats);
 
   const summaryLines = [
     "ReCSS Analysis Report",
@@ -66,10 +67,12 @@ export function renderConsoleReport(
     "Summary",
     "-------",
     `Total CSS classes:     ${stats.totalCssClasses}`,
-    `Used classes:          ${stats.usedClasses}`,
-    `Unused classes:        ${colorRed(String(stats.unusedClasses))}`,
-    `Uncertain (skipped):   ${colorYellow(String(stats.uncertainClasses))}`,
-    `Safelisted (skipped):  ${stats.safelistedClasses}`,
+    `Referenced classes:    ${stats.referencedClasses}`,
+    `Used CSS classes:      ${stats.usedCssClasses}`,
+    `Unused CSS classes:    ${colorRed(String(stats.unusedClasses))}`,
+    `Uncertain references:  ${colorYellow(String(stats.uncertainReferences))}`,
+    `Uncertain CSS classes: ${colorYellow(String(stats.uncertainCssClasses))}`,
+    `Safelisted classes:    ${stats.safelistedClasses}`,
     "",
     "Unused Classes",
     "--------------",

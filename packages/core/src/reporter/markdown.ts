@@ -1,12 +1,14 @@
 import { relative } from "node:path";
 
 import type { AnalysisResult } from "../types.js";
+import { getDisplayStats } from "./stats.js";
 
 export function renderMarkdownReport(
   root: string,
   result: AnalysisResult,
 ): string {
-  const { stats, unused } = result.unused;
+  const { unused } = result.unused;
+  const stats = getDisplayStats(result.unused.stats);
 
   const lines: string[] = [
     "# ReCSS Analysis Report",
@@ -14,10 +16,12 @@ export function renderMarkdownReport(
     "## Summary",
     "",
     `- Total CSS classes: ${stats.totalCssClasses}`,
-    `- Used classes: ${stats.usedClasses}`,
-    `- Unused classes: ${stats.unusedClasses}`,
-    `- Uncertain (skipped): ${stats.uncertainClasses}`,
-    `- Safelisted (skipped): ${stats.safelistedClasses}`,
+    `- Referenced classes: ${stats.referencedClasses}`,
+    `- Used CSS classes: ${stats.usedCssClasses}`,
+    `- Unused CSS classes: ${stats.unusedClasses}`,
+    `- Uncertain references: ${stats.uncertainReferences}`,
+    `- Uncertain CSS classes: ${stats.uncertainCssClasses}`,
+    `- Safelisted classes: ${stats.safelistedClasses}`,
     "",
     "## Unused Classes",
     "",

@@ -1,6 +1,7 @@
 import { relative } from "node:path";
 
 import type { AnalysisResult, UnusedClass } from "../types.js";
+import { getDisplayStats } from "./stats.js";
 
 function escapeHtml(value: string): string {
   return value
@@ -30,7 +31,7 @@ function buildRows(root: string, unused: UnusedClass[]): string {
 }
 
 export function renderHtmlReport(root: string, result: AnalysisResult): string {
-  const { stats } = result.unused;
+  const stats = getDisplayStats(result.unused.stats);
 
   return `<!doctype html>
 <html lang="en">
@@ -149,19 +150,27 @@ export function renderHtmlReport(root: string, result: AnalysisResult): string {
         <div class="value">${stats.totalCssClasses}</div>
       </div>
       <div class="card">
-        <div class="label">Used Classes</div>
-        <div class="value">${stats.usedClasses}</div>
+        <div class="label">Referenced Classes</div>
+        <div class="value">${stats.referencedClasses}</div>
       </div>
       <div class="card">
-        <div class="label">Unused Classes</div>
+        <div class="label">Used CSS Classes</div>
+        <div class="value">${stats.usedCssClasses}</div>
+      </div>
+      <div class="card">
+        <div class="label">Unused CSS Classes</div>
         <div class="value danger">${stats.unusedClasses}</div>
       </div>
       <div class="card">
-        <div class="label">Uncertain (Skipped)</div>
-        <div class="value warn">${stats.uncertainClasses}</div>
+        <div class="label">Uncertain References</div>
+        <div class="value warn">${stats.uncertainReferences}</div>
       </div>
       <div class="card">
-        <div class="label">Safelisted (Skipped)</div>
+        <div class="label">Uncertain CSS Classes</div>
+        <div class="value warn">${stats.uncertainCssClasses}</div>
+      </div>
+      <div class="card">
+        <div class="label">Safelisted Classes</div>
         <div class="value">${stats.safelistedClasses}</div>
       </div>
     </div>

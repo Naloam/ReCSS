@@ -1,3 +1,5 @@
+import * as cssTree from "css-tree";
+
 import type {
   ClassDefinition,
   CssParseResult,
@@ -21,19 +23,69 @@ function compareSpecificity(
   return right[2] - left[2];
 }
 
-function collectPropertyEntries(
+function getSelectorVariant(selector: string, className: string): string {
+  try {
+    const parsed = cssTree.parse(selector, {
+      context: "selector",
+    }) as unknown;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !("children" in parsed) ||
+      !parsed.children ||
+      typeof parsed.children !== "object" ||
+      !(Symbol.iterator in parsed.children)
+    ) {
+      return selector;
+    }
+
+    const currentCompound: string[] = [];
+    let compoundHasTarget = false;
+    let targetCompound: string[] | null = null;
+
+    for (const node of parsed.children as Iterable<cssTree.CssNode>) {
+      if (node.type === "Combinator") {
+        if (compoundHasTarget) {
+          targetCompound = [...currentCompound];
+        }
+        currentCompound.length = 0;
+        compoundHasTarget = false;
+        continue;
+      }
+
+      currentCompound.push(cssTree.generate(node));
+      if (node.type === "ClassSelector" && node.name === className) {
+        compoundHasTarget = true;
+      }
+    }
+
+    if (compoundHasTarget) {
+      targetCompound = [...currentCompound];
+    }
+
+    return targetCompound?.join("") ?? selector;
+  } catch {
+    return selector;
+  }
+}
+
+function groupEntriesBySelectorVariant(
   definitions: ClassDefinition[],
   property: string,
-): SpecificityConflictEntry[] {
-  const entries: SpecificityConflictEntry[] = [];
+): SpecificityConflictEntry[][] {
+  const groups = new Map<string, SpecificityConflictEntry[]>();
 
   for (const definition of definitions) {
+    const variantKey = getSelectorVariant(definition.selector, definition.name);
+    const group = groups.get(variantKey) ?? [];
+    groups.set(variantKey, group);
+
     for (const declaration of definition.declarations) {
       if (declaration.property !== property) {
         continue;
       }
 
-      entries.push({
+      group.push({
         value: declaration.value,
         specificity: definition.specificity,
         file: definition.file,
@@ -43,9 +95,11 @@ function collectPropertyEntries(
     }
   }
 
-  return entries.sort((a, b) =>
-    compareSpecificity(a.specificity, b.specificity),
-  );
+  return [...groups.values()]
+    .map((entries) =>
+      entries.sort((a, b) => compareSpecificity(a.specificity, b.specificity)),
+    )
+    .filter((entries) => entries.length > 0);
 }
 
 function hasConflict(entries: SpecificityConflictEntry[]): boolean {
@@ -94,16 +148,18 @@ export function analyzeSpecificity(
     }
 
     for (const property of propertySet) {
-      const entries = collectPropertyEntries(definitions, property);
-      if (!hasConflict(entries)) {
-        continue;
-      }
+      const entryGroups = groupEntriesBySelectorVariant(definitions, property);
+      for (const entries of entryGroups) {
+        if (!hasConflict(entries)) {
+          continue;
+        }
 
-      conflicts.push({
-        className,
-        property,
-        definitions: entries,
-      });
+        conflicts.push({
+          className,
+          property,
+          definitions: entries,
+        });
+      }
     }
 
     importantUsage.push(...collectImportantUsage(definitions));

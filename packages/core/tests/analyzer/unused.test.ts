@@ -77,8 +77,12 @@ describe("analyzeUnused", () => {
     expect(result.skipped).toEqual(["active", "is-loading"]);
     expect(result.stats).toEqual({
       totalCssClasses: 4,
+      referencedClasses: 1,
+      usedCssClasses: 1,
       usedClasses: 1,
       unusedClasses: 1,
+      uncertainReferences: 1,
+      uncertainCssClasses: 1,
       uncertainClasses: 1,
       safelistedClasses: 1,
     });
