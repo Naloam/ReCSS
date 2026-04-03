@@ -12,6 +12,10 @@ type RuleLike = {
   selector: string;
 };
 
+function isModuleStyleFile(filePath: string): boolean {
+  return filePath.endsWith(".module.css") || filePath.endsWith(".module.scss");
+}
+
 function splitSelectors(selector: string): string[] {
   return selector
     .split(",")
@@ -136,6 +140,10 @@ export async function parseCssCode(
   sourceCode: string,
 ): Promise<CssParseResult> {
   const result: CssParseResult = new Map();
+
+  if (isModuleStyleFile(filePath)) {
+    return result;
+  }
 
   try {
     const root = scss.parse(sourceCode, { from: filePath });

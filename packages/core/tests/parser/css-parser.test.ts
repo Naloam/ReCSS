@@ -92,4 +92,13 @@ describe("parseCssCode", () => {
     expect(result.has("font-helper")).toBe(false);
     expect(result.get("real")).toHaveLength(1);
   });
+
+  it("should skip css module files", async () => {
+    const result = await parseCssCode(
+      "/virtual/button.module.scss",
+      ".button { color: red; }",
+    );
+
+    expect(result.size).toBe(0);
+  });
 });
