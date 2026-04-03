@@ -73,6 +73,23 @@ describe("parseJsxCode", () => {
     expect(result.used.has("active")).toBe(true);
   });
 
+  it("should extract classes from array-based className call chains", () => {
+    const result = parseJsxCode(
+      "/virtual/App.tsx",
+      [
+        "export function Card(active: boolean, element: Element) {",
+        '  element.setAttribute("class", ["card"].concat(active ? ["active"] : []).join(" "));',
+        '  return <div className={["card", active ? "card-title" : ""].filter?.(Boolean)?.join(" ")} />;',
+        "}",
+      ].join("\n"),
+    );
+
+    expect(result.used.has("card")).toBe(true);
+    expect(result.used.has("active")).toBe(true);
+    expect(result.used.has("card-title")).toBe(true);
+    expect(result.uncertain.size).toBe(0);
+  });
+
   it("should extract classes from dom class apis", () => {
     const result = parseJsxCode(
       "/virtual/App.tsx",

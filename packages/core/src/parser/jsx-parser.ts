@@ -20,6 +20,13 @@ const DOM_CLASS_LIST_METHODS = new Set([
   "contains",
   "replace",
 ]);
+const ARRAY_CLASS_PASSTHROUGH_METHODS = new Set([
+  "filter",
+  "flat",
+  "join",
+  "slice",
+]);
+const ARRAY_CLASS_COMBINE_METHODS = new Set(["concat"]);
 const REACT_FACTORY_METHODS = new Set(["createElement", "cloneElement"]);
 
 function createEmptyResult(): SourceScanResult {
@@ -550,6 +557,18 @@ function collectExpressionClasses(
         return;
       }
 
+      if (
+        collectFromArrayClassCall(
+          sourceCode,
+          expression,
+          used,
+          uncertain,
+          classHelpers,
+        )
+      ) {
+        return;
+      }
+
       uncertain.add(getNodeSource(sourceCode, expression));
       return;
     }
@@ -614,6 +633,69 @@ function getMemberPropertyName(node: AstNode | undefined): string | undefined {
 
 function isClassListAccess(node: AstNode | undefined): boolean {
   return getMemberPropertyName(node) === "classList";
+}
+
+function collectFromArrayClassCall(
+  sourceCode: string,
+  callNode: AstNode,
+  used: Set<string>,
+  uncertain: Set<string>,
+  classHelpers: Set<string>,
+): boolean {
+  const callee = callNode.callee as AstNode | undefined;
+  if (
+    !callee ||
+    (callee.type !== "MemberExpression" &&
+      callee.type !== "OptionalMemberExpression")
+  ) {
+    return false;
+  }
+
+  const methodName = getMemberPropertyName(callee);
+  const objectNode = callee.object as AstNode | undefined;
+  if (!methodName || !objectNode) {
+    return false;
+  }
+
+  if (ARRAY_CLASS_PASSTHROUGH_METHODS.has(methodName)) {
+    collectExpressionClasses(
+      sourceCode,
+      objectNode,
+      used,
+      uncertain,
+      classHelpers,
+    );
+    return true;
+  }
+
+  if (!ARRAY_CLASS_COMBINE_METHODS.has(methodName)) {
+    return false;
+  }
+
+  collectExpressionClasses(
+    sourceCode,
+    objectNode,
+    used,
+    uncertain,
+    classHelpers,
+  );
+
+  const args = Array.isArray(callNode.arguments)
+    ? (callNode.arguments as Array<AstNode | null>)
+    : [];
+  for (const arg of args) {
+    if (arg && arg.type !== "SpreadElement") {
+      collectExpressionClasses(
+        sourceCode,
+        arg,
+        used,
+        uncertain,
+        classHelpers,
+      );
+    }
+  }
+
+  return true;
 }
 
 function collectFromDomClassCall(
