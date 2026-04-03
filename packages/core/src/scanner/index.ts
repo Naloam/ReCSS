@@ -5,6 +5,10 @@ import fg from "fast-glob";
 import { appendGeneratedDirectoryExcludes } from "../generated-dirs.js";
 import type { ScanOptions, ScanResult } from "../types.js";
 
+function isModuleStyleFile(file: string): boolean {
+  return file.endsWith(".module.css") || file.endsWith(".module.scss");
+}
+
 function classifySourceFiles(
   files: string[],
 ): Pick<ScanResult, "vueFiles" | "jsxFiles" | "htmlFiles"> {
@@ -64,7 +68,7 @@ export async function scanFiles(options: ScanOptions): Promise<ScanResult> {
   const sourceFileGroups = classifySourceFiles(sourceFiles);
 
   return {
-    cssFiles,
+    cssFiles: cssFiles.filter((file) => !isModuleStyleFile(file)),
     vueFiles: sourceFileGroups.vueFiles,
     jsxFiles: sourceFileGroups.jsxFiles,
     htmlFiles: sourceFileGroups.htmlFiles,

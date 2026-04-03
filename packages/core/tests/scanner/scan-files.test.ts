@@ -21,6 +21,7 @@ describe("scanFiles", () => {
     tempDirs.push(root);
 
     await writeFile(join(root, "a.scss"), ".a{}", "utf8");
+    await writeFile(join(root, "theme.module.scss"), ".theme{}", "utf8");
     await writeFile(
       join(root, "Comp.vue"),
       '<template><div class="a"/></template>',
@@ -52,6 +53,9 @@ describe("scanFiles", () => {
     });
 
     expect(result.cssFiles).toHaveLength(1);
+    expect(result.cssFiles.some((file) => file.endsWith("theme.module.scss"))).toBe(
+      false,
+    );
     expect(result.vueFiles).toHaveLength(1);
     expect(result.jsxFiles).toHaveLength(3);
     expect(result.htmlFiles).toHaveLength(1);
