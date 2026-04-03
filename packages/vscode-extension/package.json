@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "VSCode extension for inline ReCSS diagnostics.",
   "license": "MIT",
-  "publisher": "recss",
+  "publisher": "Naloam",
   "engines": {
     "vscode": "^1.90.0"
   },
