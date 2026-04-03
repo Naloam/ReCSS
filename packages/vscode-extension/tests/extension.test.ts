@@ -408,7 +408,7 @@ const mockModules = vi.hoisted(() => {
   };
 });
 
-vi.mock("@recss/core", () => ({
+vi.mock("recss-core", () => ({
   analyzeProject: mockModules.core.analyzeProject,
   loadConfig: mockModules.core.loadConfig,
 }));

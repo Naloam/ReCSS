@@ -4,7 +4,7 @@ import {
   analyzeProject,
   loadConfig,
   type RecssFramework,
-} from "@recss/core";
+} from "recss-core";
 import * as vscode from "vscode";
 
 import {

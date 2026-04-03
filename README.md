@@ -41,15 +41,15 @@ ReCSS is conservative by design:
   Detect specificity conflicts and `!important` heavy areas before they become style wars.
 - `recss migrate --apply`
   Copy plain style files to CSS Modules equivalents and rewrite common class references.
-- `@recss/vite-plugin`
+- `recss-vite-plugin`
   Show warnings during local HMR workflows.
-- `@recss/vscode-extension`
+- `recss-vscode-extension`
   Surface inline diagnostics, quick fixes, and a file-level fix-all action.
 
 ## Quick Start
 
 ```bash
-pnpm add -D recss
+pnpm add -D recss-cli
 recss analyze .
 recss check .
 recss migrate ./src/components/button --apply
@@ -86,29 +86,10 @@ It will not guess through ambiguous module imports or highly dynamic expressions
 
 ## Packages
 
-- [recss](./packages/cli) - CLI for analysis, checking, config bootstrap, and migration.
-- [@recss/core](./packages/core) - core engine for parsing, analysis, reporting, and migration helpers.
-- [@recss/vite-plugin](./packages/vite-plugin) - Vite integration for dev-time warnings.
-- [@recss/vscode-extension](./packages/vscode-extension) - VS Code extension for diagnostics and quick actions.
-
-## Current Status
-
-ReCSS is mature enough for early public use and real repository trials. The project already ships:
-
-- CLI workflows
-- JSON / Markdown / HTML reporting
-- Specificity analysis
-- CSS Modules migration helpers
-- Vite integration
-- VS Code diagnostics and source-edit quick fixes
-
-The roadmap from here is mostly deeper coverage, not a missing foundation.
-
-## What ReCSS Is Not
-
-- Not a production CSS tree-shaker
-- Not a CSS-in-JS framework
-- Not a destructive autofix tool that guesses through dynamic code
+- [recss-cli](./packages/cli) - CLI for analysis, checking, config bootstrap, and migration.
+- [recss-core](./packages/core) - core engine for parsing, analysis, reporting, and migration helpers.
+- [recss-vite-plugin](./packages/vite-plugin) - Vite integration for dev-time warnings.
+- [recss-vscode-extension](./packages/vscode-extension) - VS Code extension for diagnostics and quick actions.
 
 ## Release
 

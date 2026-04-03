@@ -24,7 +24,7 @@
 
   <text x="600" y="125" fill="#CBD5E1" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="18" text-anchor="middle">ReCSS CLI</text>
 
-  <text x="154" y="186" fill="#34D399" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="23">$ npx recss analyze ./src --output console</text>
+  <text x="154" y="186" fill="#34D399" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="20">$ npx recss-cli analyze ./src --output console</text>
   <text x="154" y="226" fill="#E2E8F0" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="22">ReCSS analyze ./src</text>
   <text x="154" y="258" fill="#475569" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="18">------------------------------------------------------------</text>
 

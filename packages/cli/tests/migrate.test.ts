@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const buildMigrationSuggestionsMock = vi.hoisted(() => vi.fn());
 const applyMigrationSuggestionsMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@recss/core", () => {
+vi.mock("recss-core", () => {
   return {
     buildMigrationSuggestions: buildMigrationSuggestionsMock,
     applyMigrationSuggestions: applyMigrationSuggestionsMock,

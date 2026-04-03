@@ -4,7 +4,7 @@ import {
   parseAll,
   scanFiles,
   type RecssFramework,
-} from "@recss/core";
+} from "recss-core";
 import { defineCommand } from "citty";
 import { resolve } from "node:path";
 

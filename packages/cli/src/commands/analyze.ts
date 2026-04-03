@@ -8,7 +8,7 @@ import {
   renderJsonReport,
   type AnalysisResult,
   type RecssFramework,
-} from "@recss/core";
+} from "recss-core";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 

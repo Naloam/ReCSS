@@ -1,5 +1,5 @@
 {
-  "name": "@recss/vite-plugin",
+  "name": "recss-vite-plugin",
   "version": "0.1.0",
   "description": "Vite dev plugin for ReCSS CSS health warnings.",
   "license": "MIT",
@@ -27,7 +27,7 @@
     "lint": "eslint \"src/**/*.ts\""
   },
   "dependencies": {
-    "@recss/core": "workspace:*"
+    "recss-core": "workspace:*"
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0"

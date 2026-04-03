@@ -1,5 +1,5 @@
 {
-  "name": "@recss/core",
+  "name": "recss-core",
   "version": "0.1.0",
   "description": "Core analysis engine for ReCSS.",
   "license": "MIT",

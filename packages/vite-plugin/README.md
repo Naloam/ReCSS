@@ -1,18 +1,18 @@
-# @recss/vite-plugin
+# recss-vite-plugin
 
 Vite development plugin for ReCSS.
 
 ## Install
 
 ```bash
-pnpm add -D @recss/vite-plugin
+pnpm add -D recss-vite-plugin
 ```
 
 ## Usage
 
 ```ts
 import { defineConfig } from "vite";
-import { recssVitePlugin } from "@recss/vite-plugin";
+import { recssVitePlugin } from "recss-vite-plugin";
 
 export default defineConfig({
   plugins: [recssVitePlugin()],

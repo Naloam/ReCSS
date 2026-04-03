@@ -1,5 +1,6 @@
 {
-  "name": "@recss/vscode-extension",
+  "name": "recss-vscode-extension",
+  "displayName": "ReCSS",
   "version": "0.1.0",
   "description": "VSCode extension for inline ReCSS diagnostics.",
   "license": "MIT",
@@ -66,6 +67,6 @@
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {
-    "@recss/core": "workspace:*"
+    "recss-core": "workspace:*"
   }
 }

@@ -1,4 +1,4 @@
-export { defineConfig } from '@recss/core'
+export { defineConfig } from 'recss-core'
 export type {
   RecssConfig,
   RecssFileMatch,
@@ -6,4 +6,4 @@ export type {
   RecssReportFormat,
   RecssReportOptions,
   SafelistPattern,
-} from '@recss/core'
+} from 'recss-core'

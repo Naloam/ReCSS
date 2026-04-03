@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import type { AnalysisResult, ClassDefinition } from "@recss/core";
+import type { AnalysisResult, ClassDefinition } from "recss-core";
 
 export const RECSS_DIAGNOSTIC_CODE = "unused-class";
 

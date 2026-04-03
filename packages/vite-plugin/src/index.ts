@@ -52,7 +52,7 @@ async function runAnalysis(
   server: DevServer,
   options: RecssVitePluginOptions,
 ): Promise<void> {
-  const { analyzeProject } = await import("@recss/core");
+  const { analyzeProject } = await import("recss-core");
   const result = await analyzeProject({
     root: server.config.root,
     framework: options.framework ?? "auto",

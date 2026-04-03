@@ -1,11 +1,11 @@
-# @recss/core
+# recss-core
 
 Core analysis engine for ReCSS.
 
 ## Install
 
 ```bash
-pnpm add @recss/core
+pnpm add recss-core
 ```
 
 ## Purpose

@@ -5,7 +5,7 @@ import { createInterface } from "node:readline/promises";
 
 import { defineCommand } from "citty";
 
-const CONFIG_TEMPLATE = `import { defineConfig } from "recss";
+const CONFIG_TEMPLATE = `import { defineConfig } from "recss-cli";
 
 export default defineConfig({
   root: ".",

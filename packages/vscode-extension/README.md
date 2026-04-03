@@ -1,4 +1,4 @@
-# @recss/vscode-extension
+# recss-vscode-extension
 
 VSCode extension package for ReCSS.
 

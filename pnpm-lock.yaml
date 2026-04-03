@@ -38,12 +38,12 @@ importers:
 
   packages/cli:
     dependencies:
-      '@recss/core':
-        specifier: workspace:*
-        version: link:../core
       citty:
         specifier: ^0.1.6
         version: 0.1.6
+      recss-core:
+        specifier: workspace:*
+        version: link:../core
 
   packages/core:
     dependencies:
@@ -90,7 +90,7 @@ importers:
 
   packages/vite-plugin:
     dependencies:
-      '@recss/core':
+      recss-core:
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -100,7 +100,7 @@ importers:
 
   packages/vscode-extension:
     dependencies:
-      '@recss/core':
+      recss-core:
         specifier: workspace:*
         version: link:../core
 

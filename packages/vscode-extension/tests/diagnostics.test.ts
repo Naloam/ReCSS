@@ -10,7 +10,7 @@ import {
   resolveDefinitionRange,
 } from "../src/diagnostics.js";
 
-import type { AnalysisResult, ClassDefinition } from "@recss/core";
+import type { AnalysisResult, ClassDefinition } from "recss-core";
 
 describe("resolveDefinitionRange", () => {
   it("should highlight the class token when it exists on the target line", () => {

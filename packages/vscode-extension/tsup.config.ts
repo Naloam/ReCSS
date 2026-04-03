@@ -9,5 +9,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   dts: false,
-  external: ["vscode", "@recss/core"],
+  external: ["vscode", "recss-core"],
 });

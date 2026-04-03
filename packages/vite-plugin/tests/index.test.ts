@@ -4,7 +4,7 @@ import { recssVitePlugin } from "../src/index.js";
 
 const analyzeProjectMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@recss/core", () => {
+vi.mock("recss-core", () => {
   return {
     analyzeProject: analyzeProjectMock,
   };

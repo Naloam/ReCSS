@@ -5,7 +5,7 @@ CLI package for ReCSS.
 ## Install
 
 ```bash
-pnpm add -D recss
+pnpm add -D recss-cli
 ```
 
 ## Usage

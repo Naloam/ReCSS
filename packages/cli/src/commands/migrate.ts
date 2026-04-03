@@ -4,7 +4,7 @@ import {
   applyMigrationSuggestions,
   buildMigrationSuggestions,
   type MigrationSuggestion,
-} from "@recss/core";
+} from "recss-core";
 import { defineCommand } from "citty";
 
 function renderSuggestions(

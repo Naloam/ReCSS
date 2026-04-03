@@ -1,5 +1,5 @@
 {
-  "name": "recss",
+  "name": "recss-cli",
   "version": "0.1.0",
   "description": "CLI for ReCSS CSS health analyzer.",
   "license": "MIT",
@@ -33,7 +33,7 @@
     "lint": "eslint \"src/**/*.ts\""
   },
   "dependencies": {
-    "@recss/core": "workspace:*",
+    "recss-core": "workspace:*",
     "citty": "^0.1.6"
   }
 }
