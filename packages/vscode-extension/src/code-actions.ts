@@ -8,6 +8,8 @@ export const REMOVE_UNUSED_CLASS_RULE_TITLE =
   "ReCSS: Remove Unused Class Rule";
 export const REMOVE_UNUSED_CLASS_SELECTOR_TITLE =
   "ReCSS: Remove Unused Class Selector";
+export const REMOVE_ALL_UNUSED_SELECTORS_TITLE =
+  "ReCSS: Remove All Simple Unused Selectors";
 
 type UnusedClassDiagnosticData = {
   className: string;
@@ -47,6 +49,13 @@ type SelectorSlice = {
 type UnusedClassRemoval = {
   range: vscode.Range;
   title: string;
+};
+
+type ResolvedRemoval = {
+  diagnostic: vscode.Diagnostic;
+  endOffset: number;
+  range: vscode.Range;
+  startOffset: number;
 };
 
 type RuleBounds = {
@@ -285,6 +294,68 @@ function createRemoveUnusedClassRuleAction(
   return action;
 }
 
+function createRemoveAllUnusedSelectorsAction(
+  document: vscode.TextDocument,
+  diagnostics: vscode.Diagnostic[],
+): vscode.CodeAction | undefined {
+  const removals: ResolvedRemoval[] = [];
+
+  for (const diagnostic of diagnostics) {
+    const removal = resolveUnusedClassRemoval(document, diagnostic);
+    if (!removal) {
+      continue;
+    }
+
+    const startOffset = document.offsetAt(removal.range.start);
+    const endOffset = document.offsetAt(removal.range.end);
+    const duplicate = removals.some(
+      (item) =>
+        item.startOffset === startOffset && item.endOffset === endOffset,
+    );
+    if (duplicate) {
+      continue;
+    }
+
+    removals.push({
+      diagnostic,
+      endOffset,
+      range: removal.range,
+      startOffset,
+    });
+  }
+
+  if (removals.length < 2) {
+    return undefined;
+  }
+
+  const sortedRemovals = [...removals].sort(
+    (left, right) => left.startOffset - right.startOffset,
+  );
+  for (let index = 1; index < sortedRemovals.length; index += 1) {
+    if (
+      (sortedRemovals[index]?.startOffset ?? 0) <
+      (sortedRemovals[index - 1]?.endOffset ?? 0)
+    ) {
+      return undefined;
+    }
+  }
+
+  const action = new vscode.CodeAction(
+    REMOVE_ALL_UNUSED_SELECTORS_TITLE,
+    vscode.CodeActionKind.QuickFix,
+  );
+  const edit = new vscode.WorkspaceEdit();
+
+  for (const removal of [...sortedRemovals].reverse()) {
+    edit.delete(document.uri, removal.range);
+  }
+
+  action.edit = edit;
+  action.diagnostics = sortedRemovals.map((removal) => removal.diagnostic);
+
+  return action;
+}
+
 export function createDiagnosticCodeActions(
   document: vscode.TextDocument,
   context: vscode.CodeActionContext,
@@ -302,6 +373,10 @@ export function createDiagnosticCodeActions(
   const removeAction = createRemoveUnusedClassRuleAction(
     document,
     recssDiagnostics[0],
+  );
+  const removeAllAction = createRemoveAllUnusedSelectorsAction(
+    document,
+    recssDiagnostics,
   );
   const refreshAction = new vscode.CodeAction(
     "ReCSS: Refresh Analysis",
@@ -323,7 +398,14 @@ export function createDiagnosticCodeActions(
   };
   clearAction.diagnostics = recssDiagnostics;
 
-  return removeAction
-    ? [removeAction, refreshAction, clearAction]
-    : [refreshAction, clearAction];
+  const actions: vscode.CodeAction[] = [];
+  if (removeAction) {
+    actions.push(removeAction);
+  }
+  if (removeAllAction) {
+    actions.push(removeAllAction);
+  }
+
+  actions.push(refreshAction, clearAction);
+  return actions;
 }
