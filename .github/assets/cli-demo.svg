@@ -1,0 +1,48 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="120" y1="92" x2="1080" y2="628" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827"/>
+      <stop offset="1" stop-color="#0B1220"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="720" rx="28" fill="url(#bg)"/>
+  <circle cx="1020" cy="112" r="180" fill="#10B981" fill-opacity="0.08"/>
+  <circle cx="186" cy="620" r="220" fill="#38BDF8" fill-opacity="0.07"/>
+
+  <rect x="120" y="92" width="960" height="536" rx="24" fill="url(#panel)" stroke="#334155" stroke-width="2"/>
+  <rect x="120" y="92" width="960" height="54" rx="24" fill="#111827"/>
+  <rect x="120" y="122" width="960" height="24" fill="#111827"/>
+
+  <circle cx="156" cy="119" r="8" fill="#F87171"/>
+  <circle cx="182" cy="119" r="8" fill="#FBBF24"/>
+  <circle cx="208" cy="119" r="8" fill="#34D399"/>
+
+  <text x="600" y="125" fill="#CBD5E1" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="18" text-anchor="middle">ReCSS CLI</text>
+
+  <text x="154" y="186" fill="#34D399" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="23">$ npx recss analyze ./src --output console</text>
+  <text x="154" y="226" fill="#E2E8F0" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="22">ReCSS analyze ./src</text>
+  <text x="154" y="258" fill="#475569" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="18">------------------------------------------------------------</text>
+
+  <text x="154" y="308" fill="#F8FAFC" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="22">Unused classes</text>
+  <text x="174" y="344" fill="#FCA5A5" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="20">src/styles/card.scss</text>
+  <text x="210" y="376" fill="#CBD5E1" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="19">- .legacy-card</text>
+  <text x="210" y="406" fill="#CBD5E1" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="19">- .card-shadow</text>
+
+  <text x="154" y="462" fill="#F8FAFC" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="22">Specificity conflicts</text>
+  <text x="174" y="498" fill="#93C5FD" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="20">src/styles/button.scss</text>
+  <text x="210" y="530" fill="#CBD5E1" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="19">- .btn.primary vs .toolbar .btn</text>
+
+  <rect x="746" y="282" width="286" height="220" rx="18" fill="#0F172A" stroke="#1E293B" stroke-width="2"/>
+  <text x="776" y="326" fill="#F8FAFC" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="20">Stats</text>
+  <text x="776" y="366" fill="#94A3B8" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="18">CSS classes: 128</text>
+  <text x="776" y="398" fill="#34D399" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="18">Used: 97</text>
+  <text x="776" y="430" fill="#FBBF24" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="18">Uncertain: 12</text>
+  <text x="776" y="462" fill="#F87171" font-family="Menlo, Consolas, Monaco, 'Liberation Mono', monospace" font-size="18">Unused: 19</text>
+
+  <text x="120" y="676" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="20">Safe-by-default CSS analysis for Vue, React, and HTML codebases.</text>
+</svg>

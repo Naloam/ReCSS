@@ -1,104 +1,116 @@
 # ReCSS
 
-ReCSS is a focused TypeScript tool for CSS health analysis in large codebases. It starts with a small, source-level MVP for unused class detection and leaves heavier refactor workflows for later.
+[![Version](https://img.shields.io/github/package-json/v/Naloam/ReCSS?filename=packages%2Fcli%2Fpackage.json&label=version&color=10b981)](https://github.com/Naloam/ReCSS)
+[![CI](https://github.com/Naloam/ReCSS/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Naloam/ReCSS/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/Naloam/ReCSS?color=111827)](./LICENSE)
+[![Stars](https://img.shields.io/github/stars/Naloam/ReCSS?style=social)](https://github.com/Naloam/ReCSS/stargazers)
+
+> Find dead CSS before it finds you.
+
+<p align="center">
+  <img src="./.github/assets/cli-demo.svg" alt="ReCSS CLI output screenshot" width="920" />
+</p>
+
+ReCSS is a focused TypeScript tool for CSS health analysis in real front-end repositories. It helps teams answer three painful questions fast:
+
+- Which CSS classes are definitely used?
+- Which selectors look dead and safe to review?
+- Where is specificity becoming a maintenance problem?
+
+It also gives you a conservative CSS Modules migration path instead of forcing you into an all-or-nothing rewrite.
 
 ## Why ReCSS
 
-- Source-level analysis instead of production bundle trimming
-- Conservative logic to reduce false positives
-- CLI-first workflow for local use and CI gates
-- A deliberately small Phase 1 scope that can ship quickly
+If you have ever opened a five-year-old `styles.scss` file and hesitated before deleting a selector because "something somewhere probably still uses it", ReCSS is the tool for that moment.
 
-## Current Status
+Most CSS cleanup tools start from the production bundle. ReCSS starts from your source tree. It is designed for legacy Vue, React, and mixed codebases where the real problem is not "optimize harder", but "show me what is safe to touch".
 
-Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with migration flow, Vite integration, and a VSCode extension baseline with initial source-editing quick fixes.
+ReCSS is conservative by design:
 
-## Current Scope
+- Dynamic classes are treated as uncertain instead of aggressively reported as unused.
+- CSS Modules are skipped instead of being guessed.
+- Migration helpers rewrite common patterns, but leave ambiguous cases alone.
 
-- Detect unused CSS/SCSS class selectors from Vue/React/HTML source references
-- Keep dynamic classes conservative and out of unused reports
-- Detect specificity conflicts with threshold-based CLI failure mode
-- Support `console`, `json`, and `html` outputs
-- Support config loading (`recss.config.ts/js/mjs` and `package.json#recss`)
-- Provide `recss init` to bootstrap config
-- Provide `recss migrate` for CSS Modules migration suggestions and apply flow
-- Provide `@recss/vite-plugin` for HMR-time warnings
-- Provide `@recss/vscode-extension` for inline unused-class diagnostics, quick fixes, and file-level fix-all support
+## What You Get
 
-### `recss migrate --apply` support scope
-
-`recss migrate --apply` copies plain CSS/SCSS files to `.module` equivalents and rewrites class references in source files. The current rewrite coverage:
-
-**React className patterns:**
-
-| Pattern                          | Example                                                            |
-| -------------------------------- | ------------------------------------------------------------------ |
-| String literal                   | `className="card active"`                                          |
-| Template literal                 | ``className={`btn ${active ? 'active' : ''}`}``                    |
-| clsx / cn / classnames call      | `className={clsx('btn', { active })}`                              |
-| Array literal                    | `className={["card", active && "active"]}`                         |
-| `.filter(Boolean).join(" ")`     | `className={["card", cond && "active"].filter(Boolean).join(" ")}` |
-| `.concat()` chain                | `className={["card"].concat(cond ? ["active"] : [])}`              |
-| Binary string concatenation      | `className={"card " + (active ? "active" : "")}`                   |
-| Conditional / logical expression | `className={active ? "on" : "off"}`                                |
-| Wrapper function calls           | `className={mergeClasses(clsx("card"), active ? "active" : "")}`   |
-
-**Vue SFC patterns:**
-
-| Pattern                   | Example                                    |
-| ------------------------- | ------------------------------------------ |
-| Static `class` attribute  | `<div class="card">`                       |
-| Object `:class` binding   | `:class="{ active: isActive }"`            |
-| Array `:class` binding    | `:class="['foo', cond ? 'bar' : '']"`      |
-| Mixed static + dynamic    | `<div class="card" :class="{ active }">`   |
-| Custom style module alias | `<style module="classes">` uses `$classes` |
-| `useCssModule()` accessors | `<script setup>const styles = useCssModule()</script>` |
-| Wrapper function calls    | `:class="mergeClasses(['card'], isActive && 'active')"` |
-
-**Limitations:**
-
-- This is **not** a general-purpose AST auto-migration tool. It covers the most common className patterns listed above.
-- Dynamic variable references (e.g., `className={someVar}`) and complex member expressions are still left untouched.
-- Wrapper calls can be rewritten when their nested arguments are supported class expressions.
-- Existing CSS Modules imports are reused, and duplicate side-effect style imports are removed during migration.
-- Ambiguous class names coming from multiple imported style modules are left untouched instead of being guessed.
-- Spread operators and deeply nested expressions may not be fully rewritten.
-- Only `.css` and `.scss` source files are processed.
-
-Deferred:
-
-- Deeper CSS Modules auto-rewrite coverage beyond the patterns above
-- Deeper VSCode source-editing quick fixes beyond current simple-selector removals
-
-## Workspace
-
-- packages/core: analysis engine
-- packages/cli: command line interface and typed config entry
-- packages/vite-plugin: Vite integration for HMR-time warnings
-- packages/vscode-extension: VSCode extension for inline diagnostics
-- docs: project plan and prompt handbook
-- config/mcp: MCP setup examples
-- .vscode: recommended local IDE setup
-- examples/vue-demo: minimal target project for local CLI debugging
+- `recss analyze`
+  Find unused CSS and SCSS classes from Vue, React, and HTML sources.
+- `recss check`
+  Detect specificity conflicts and `!important` heavy areas before they become style wars.
+- `recss migrate --apply`
+  Copy plain style files to CSS Modules equivalents and rewrite common class references.
+- `@recss/vite-plugin`
+  Show warnings during local HMR workflows.
+- `@recss/vscode-extension`
+  Surface inline diagnostics, quick fixes, and a file-level fix-all action.
 
 ## Quick Start
 
 ```bash
-pnpm install
-pnpm -r build
-pnpm -r test
+pnpm add -D recss
+recss analyze .
+recss check .
+recss migrate ./src/components/button --apply
 ```
 
-## CLI
+Workspace development:
+
+```bash
+pnpm install
+pnpm build
+pnpm lint
+pnpm test
+```
+
+## CLI Commands
 
 ```bash
 recss analyze [dir] [--framework auto|vue|react|html] [--output console|json|html] [--config <path>] [--safelist a,b] [--outfile report-path]
 recss check [dir] [--framework auto|vue|react|html] [--threshold 0] [--config <path>]
 recss init [dir]
-recss migrate [component-dir]
+recss migrate [component-dir] [--apply]
 ```
 
-## Release Prep
+## Migration Assistant
+
+`recss migrate --apply` is intentionally pragmatic, not magical.
+
+Current rewrite coverage includes:
+
+- React string literals, template literals, `clsx` / `cn` / `classnames`, arrays, filter/join chains, concat chains, conditional/logical expressions, binary string concatenation, wrapper calls, and several optional-call variants.
+- Vue static `class`, object `:class`, array `:class`, mixed static + dynamic bindings, custom style module aliases, `useCssModule()` accessors, and wrapper calls around supported expressions.
+
+It will not guess through ambiguous module imports or highly dynamic expressions. That is deliberate.
+
+## Packages
+
+- [recss](./packages/cli) - CLI for analysis, checking, config bootstrap, and migration.
+- [@recss/core](./packages/core) - core engine for parsing, analysis, reporting, and migration helpers.
+- [@recss/vite-plugin](./packages/vite-plugin) - Vite integration for dev-time warnings.
+- [@recss/vscode-extension](./packages/vscode-extension) - VS Code extension for diagnostics and quick actions.
+
+## Current Status
+
+ReCSS is mature enough for early public use and real repository trials. The project already ships:
+
+- CLI workflows
+- JSON / Markdown / HTML reporting
+- Specificity analysis
+- CSS Modules migration helpers
+- Vite integration
+- VS Code diagnostics and source-edit quick fixes
+
+The roadmap from here is mostly deeper coverage, not a missing foundation.
+
+## What ReCSS Is Not
+
+- Not a production CSS tree-shaker
+- Not a CSS-in-JS framework
+- Not a destructive autofix tool that guesses through dynamic code
+
+## Release
+
+This repo uses Changesets for package versioning and npm release orchestration.
 
 ```bash
 pnpm changeset
@@ -106,17 +118,10 @@ pnpm version-packages
 pnpm release
 ```
 
-GitHub Actions:
+Release automation is wired through [`.changeset/config.json`](./.changeset/config.json) and [`.github/workflows/release.yml`](./.github/workflows/release.yml).
 
-- CI workflow: `.github/workflows/ci.yml`
-- Release workflow: `.github/workflows/release.yml` (requires `NPM_TOKEN` secret)
-- Detailed guide: `docs/RELEASE.md`
+## License
 
-## Name Note
+[MIT](./LICENSE)
 
-Current name remains ReCSS, which is short and intention-revealing.
-Alternative optional names:
-
-- StyleDebt
-- ClassAudit
-- CascadeGuard
+If ReCSS saves you time in a messy stylesheet, star the repo.
