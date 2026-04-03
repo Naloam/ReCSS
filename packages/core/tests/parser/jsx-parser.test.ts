@@ -55,6 +55,24 @@ describe("parseJsxCode", () => {
     expect(result.used.has("card-title")).toBe(true);
   });
 
+  it("should extract classes from optional helper and dom api calls", () => {
+    const result = parseJsxCode(
+      "/virtual/App.tsx",
+      [
+        'import React from "react";',
+        'import clsx from "clsx";',
+        "export function Card(node, element, active) {",
+        '  node.classList?.add("card", "active");',
+        '  element?.setAttribute("class", active ? "card" : "active");',
+        '  return React?.createElement("div", { className: clsx?.("card", active && "active") });',
+        "}",
+      ].join("\n"),
+    );
+
+    expect(result.used.has("card")).toBe(true);
+    expect(result.used.has("active")).toBe(true);
+  });
+
   it("should extract classes from dom class apis", () => {
     const result = parseJsxCode(
       "/virtual/App.tsx",

@@ -1077,7 +1077,10 @@ function formatReactClassNameCode(
     return rewrittenCode;
   }
 
-  if (expression.type === "CallExpression") {
+  if (
+    expression.type === "CallExpression" ||
+    expression.type === "OptionalCallExpression"
+  ) {
     const callee = expression.callee as ReactAstNode | undefined;
     if (
       callee &&
@@ -1409,7 +1412,8 @@ function rewriteReactExpression(
         code: `{ ${rewrittenProperties.join(", ")} }`,
       };
     }
-    case "CallExpression": {
+    case "CallExpression":
+    case "OptionalCallExpression": {
       const callee = expression.callee as ReactAstNode | undefined;
       const args = Array.isArray(expression.arguments)
         ? (expression.arguments as ReactAstNode[])
@@ -1441,7 +1445,7 @@ function rewriteReactExpression(
           changed: true,
           code:
             rewrittenCall ??
-            `${getReactNodeSource(source, callee)}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
+            `${getReactNodeSource(source, callee)}${expression.type === "OptionalCallExpression" && Boolean(expression.optional) ? "?.(" : "("}${rewrittenArgs.map((result) => result.code).join(", ")})`,
         };
       }
 
@@ -1486,7 +1490,7 @@ function rewriteReactExpression(
           ? `[${propertyCode}]`
           : `${Boolean(callee.optional) ? "?." : "."}${propertyCode}`;
 
-        const code = `${rewrittenObject.code}${accessor}(${rewrittenArgs.map((result) => result.code).join(", ")})`;
+        const code = `${rewrittenObject.code}${accessor}${expression.type === "OptionalCallExpression" && Boolean(expression.optional) ? "?.(" : "("}${rewrittenArgs.map((result) => result.code).join(", ")})`;
         if (!changed && !stringContext) {
           return preserveReactNode(source, expression);
         }
@@ -1518,7 +1522,7 @@ function rewriteReactExpression(
         changed: true,
         code:
           rewrittenCall ??
-          `${getReactNodeSource(source, callee)}(${rewrittenArgs.map((result) => result.code).join(", ")})`,
+          `${getReactNodeSource(source, callee)}${expression.type === "OptionalCallExpression" && Boolean(expression.optional) ? "?.(" : "("}${rewrittenArgs.map((result) => result.code).join(", ")})`,
       };
     }
     case "MemberExpression":
@@ -1969,7 +1973,10 @@ function rewriteReactClassNames(
     const replacements: Replacement[] = [];
 
     walkReactAst(ast, (node) => {
-      if (node.type === "CallExpression") {
+      if (
+        node.type === "CallExpression" ||
+        node.type === "OptionalCallExpression"
+      ) {
         const domReplacement = buildDomClassCallReplacement(
           content,
           node,

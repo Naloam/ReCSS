@@ -689,6 +689,57 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should rewrite optional react helper and dom api calls", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-optional-react-calls-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.js"),
+        [
+          'import React from "react";',
+          'import clsx from "clsx";',
+          'import "./card.scss";',
+          "",
+          "export function Card(node, element, active) {",
+          '  node.classList?.add("card", "active");',
+          '  element?.setAttribute("class", active ? "card" : "active");',
+          '  return React?.createElement("div", { className: clsx?.("card", active && "active") });',
+          "}",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.js"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        "node.classList?.add(styles.card, styles.active);",
+      );
+      expect(rewritten).toContain(
+        'element?.setAttribute("class", active ? styles.card : styles.active);',
+      );
+      expect(rewritten).toContain(
+        'React?.createElement("div", { className: clsx?.(styles.card, active && styles.active) });',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should leave ambiguous react class names untouched across multiple module imports", async () => {
     const root = await mkdtemp(
       resolve(tmpdir(), "recss-core-migrate-react-ambiguous-"),

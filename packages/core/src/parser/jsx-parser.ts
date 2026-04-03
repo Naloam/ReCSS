@@ -525,7 +525,8 @@ function collectExpressionClasses(
       collectFromObjectExpression(expression, used);
       return;
     }
-    case "CallExpression": {
+    case "CallExpression":
+    case "OptionalCallExpression": {
       const callee = expression.callee as AstNode | undefined;
       if (
         callee?.type === "Identifier" &&
@@ -587,7 +588,11 @@ function collectExpressionClasses(
 }
 
 function getMemberPropertyName(node: AstNode | undefined): string | undefined {
-  if (!node || node.type !== "MemberExpression") {
+  if (
+    !node ||
+    (node.type !== "MemberExpression" &&
+      node.type !== "OptionalMemberExpression")
+  ) {
     return undefined;
   }
 
@@ -619,7 +624,11 @@ function collectFromDomClassCall(
   classHelpers: Set<string>,
 ): void {
   const callee = callNode.callee as AstNode | undefined;
-  if (!callee || callee.type !== "MemberExpression") {
+  if (
+    !callee ||
+    (callee.type !== "MemberExpression" &&
+      callee.type !== "OptionalMemberExpression")
+  ) {
     return;
   }
 
@@ -709,7 +718,10 @@ function isReactFactoryCall(
     return reactFactories.has(callee.name ?? "");
   }
 
-  if (callee.type !== "MemberExpression") {
+  if (
+    callee.type !== "MemberExpression" &&
+    callee.type !== "OptionalMemberExpression"
+  ) {
     return false;
   }
 
@@ -861,7 +873,10 @@ export function parseJsxCode(
         collectReactAliasBindings(node, reactNamespaces, reactFactories);
       }
 
-      if (node.type === "CallExpression") {
+      if (
+        node.type === "CallExpression" ||
+        node.type === "OptionalCallExpression"
+      ) {
         collectFromDomClassCall(
           sourceCode,
           node,
