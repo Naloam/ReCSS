@@ -1,5 +1,7 @@
 # ReCSS
 
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 [![Version](https://img.shields.io/github/package-json/v/Naloam/ReCSS?filename=packages%2Fcli%2Fpackage.json&label=version&color=10b981)](https://github.com/Naloam/ReCSS)
 [![CI](https://github.com/Naloam/ReCSS/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Naloam/ReCSS/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/Naloam/ReCSS?color=111827)](./LICENSE)
