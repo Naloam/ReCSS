@@ -438,10 +438,12 @@ export function createDiagnosticCodeActions(
     return [];
   }
 
-  const removeAction = createRemoveUnusedClassRuleAction(
-    document,
-    recssDiagnostics[0],
+  const firstRemovableDiagnostic = recssDiagnostics.find((diagnostic) =>
+    Boolean(resolveUnusedClassRemoval(document, diagnostic)),
   );
+  const removeAction = firstRemovableDiagnostic
+    ? createRemoveUnusedClassRuleAction(document, firstRemovableDiagnostic)
+    : undefined;
   const removeAllAction = createRemoveAllUnusedSelectorsAction(
     document,
     recssDiagnostics,

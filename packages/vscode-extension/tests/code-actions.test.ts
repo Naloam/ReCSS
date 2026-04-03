@@ -256,6 +256,77 @@ describe("createDiagnosticCodeActions", () => {
     ]);
   });
 
+  it("should pick the first removable diagnostic when earlier ones are non-simple", () => {
+    const actions = createDiagnosticCodeActions(
+      createMockDocument(".card:hover {}\n.card { color: red; }\n") as never,
+      {
+        diagnostics: [
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card",
+              selector: ".card:hover",
+            },
+            message: 'Unused CSS class ".card" is not referenced.',
+            range: {
+              end: {
+                character: 11,
+                line: 0,
+              },
+              start: {
+                character: 0,
+                line: 0,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card",
+              selector: ".card",
+            },
+            message: 'Unused CSS class ".card" is not referenced.',
+            range: {
+              end: {
+                character: 5,
+                line: 1,
+              },
+              start: {
+                character: 0,
+                line: 1,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+        ],
+      } as never,
+    );
+
+    expect(actions.map((action) => action.title)).toEqual([
+      REMOVE_UNUSED_CLASS_RULE_TITLE,
+      "ReCSS: Refresh Analysis",
+      "ReCSS: Clear Diagnostics",
+    ]);
+    expect(actions[0]?.edit?.entries).toEqual([
+      {
+        range: {
+          end: {
+            character: 0,
+            line: 2,
+          },
+          start: {
+            character: 0,
+            line: 1,
+          },
+        },
+        uri: "/workspace/app-a/src/styles/card.scss",
+      },
+    ]);
+  });
+
   it("should remove only the unused selector from selector lists", () => {
     const actions = createDiagnosticCodeActions(
       createMockDocument(".card, .card-title {\n  color: red;\n}\n") as never,
