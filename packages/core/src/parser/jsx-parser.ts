@@ -29,6 +29,10 @@ const ARRAY_CLASS_PASSTHROUGH_METHODS = new Set([
 const ARRAY_CLASS_COMBINE_METHODS = new Set(["concat"]);
 const REACT_FACTORY_METHODS = new Set(["createElement", "cloneElement"]);
 
+function isCssModulePath(value: string | undefined): boolean {
+  return Boolean(value && /\.module\.(css|scss)$/u.test(value));
+}
+
 function createEmptyResult(): SourceScanResult {
   return {
     used: new Set<string>(),
@@ -197,6 +201,26 @@ function collectRequireClassHelper(
   if (requireSource === "clsx" || requireSource === "classnames") {
     helpers.add(id.name ?? "");
   }
+}
+
+function isCssModuleImportDeclaration(node: AstNode): boolean {
+  if (node.type !== "ImportDeclaration") {
+    return false;
+  }
+
+  const source = node.source as { value?: unknown } | undefined;
+  return isCssModulePath(
+    typeof source?.value === "string" ? source.value : undefined,
+  );
+}
+
+function isCssModuleRequireDeclaration(node: AstNode): boolean {
+  if (node.type !== "VariableDeclarator") {
+    return false;
+  }
+
+  const init = node.init as AstNode | undefined;
+  return isCssModulePath(getRequireCallSource(init));
 }
 
 function getRequireCallSource(node: AstNode | undefined): string | undefined {
@@ -941,8 +965,13 @@ export function parseJsxCode(
     const classHelpers = new Set<string>(KNOWN_CLASS_HELPERS);
     const reactNamespaces = new Set<string>(["React"]);
     const reactFactories = new Set<string>();
+    let usesCssModules = false;
 
     walkAst(ast, (node) => {
+      if (isCssModuleImportDeclaration(node) || isCssModuleRequireDeclaration(node)) {
+        usesCssModules = true;
+      }
+
       if (node.type === "ImportDeclaration") {
         collectClassHelpers(node, classHelpers);
         collectReactImportBindings(node, reactNamespaces, reactFactories);
@@ -1003,6 +1032,10 @@ export function parseJsxCode(
         }
       }
     });
+
+    if (usesCssModules) {
+      return createEmptyResult();
+    }
 
     return result;
   } catch (error) {

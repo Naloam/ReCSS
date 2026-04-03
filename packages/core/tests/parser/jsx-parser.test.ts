@@ -174,6 +174,32 @@ describe("parseJsxCode", () => {
     expect(result.uncertain.size).toBe(0);
   });
 
+  it("should skip file when css modules import syntax is present", () => {
+    const result = parseJsxCode(
+      "/virtual/App.tsx",
+      [
+        'import classes from "./card.module.scss";',
+        'export function App(){ return <div className={classes.btn || "card"} /> }',
+      ].join("\n"),
+    );
+
+    expect(result.used.size).toBe(0);
+    expect(result.uncertain.size).toBe(0);
+  });
+
+  it("should skip file when css modules require syntax is present", () => {
+    const result = parseJsxCode(
+      "/virtual/App.tsx",
+      [
+        'const classes = require("./card.module.css");',
+        'export function App(){ return <div className={classes.btn || "card"} /> }',
+      ].join("\n"),
+    );
+
+    expect(result.used.size).toBe(0);
+    expect(result.uncertain.size).toBe(0);
+  });
+
   it("should classify variable and call expressions as uncertain", () => {
     const result = parseJsxCode(
       "/virtual/App.tsx",
