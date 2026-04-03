@@ -87,6 +87,7 @@ vi.mock("vscode", () => {
 import {
   CLEAR_DIAGNOSTICS_COMMAND,
   createDiagnosticCodeActions,
+  FIX_ALL_UNUSED_SELECTORS_TITLE,
   REFRESH_ANALYSIS_COMMAND,
   REMOVE_ALL_UNUSED_SELECTORS_TITLE,
   REMOVE_UNUSED_CLASS_RULE_TITLE,
@@ -569,6 +570,105 @@ describe("createDiagnosticCodeActions", () => {
       title: REMOVE_ALL_UNUSED_SELECTORS_TITLE,
     });
     expect(actions[1]?.edit?.entries).toEqual([
+      {
+        range: {
+          end: {
+            character: 0,
+            line: 6,
+          },
+          start: {
+            character: 0,
+            line: 3,
+          },
+        },
+        uri: "/workspace/app-a/src/styles/card.scss",
+      },
+      {
+        range: {
+          end: {
+            character: 0,
+            line: 3,
+          },
+          start: {
+            character: 0,
+            line: 0,
+          },
+        },
+        uri: "/workspace/app-a/src/styles/card.scss",
+      },
+    ]);
+  });
+
+  it("should provide a source fix-all action when requested", () => {
+    const actions = createDiagnosticCodeActions(
+      createMockDocument(
+        [
+          ".card {",
+          "  color: red;",
+          "}",
+          ".card-title {",
+          "  color: blue;",
+          "}",
+          "",
+        ].join("\n"),
+      ) as never,
+      {
+        diagnostics: [
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card",
+              selector: ".card",
+            },
+            message: 'Unused CSS class ".card" is not referenced.',
+            range: {
+              end: {
+                character: 5,
+                line: 0,
+              },
+              start: {
+                character: 0,
+                line: 0,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card-title",
+              selector: ".card-title",
+            },
+            message: 'Unused CSS class ".card-title" is not referenced.',
+            range: {
+              end: {
+                character: 11,
+                line: 3,
+              },
+              start: {
+                character: 0,
+                line: 3,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+        ],
+        only: {
+          value: "source.fixAll",
+        },
+      } as never,
+    );
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      kind: {
+        value: "source.fixAll.recss",
+      },
+      title: FIX_ALL_UNUSED_SELECTORS_TITLE,
+    });
+    expect(actions[0]?.edit?.entries).toEqual([
       {
         range: {
           end: {

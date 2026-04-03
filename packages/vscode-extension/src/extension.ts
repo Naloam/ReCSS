@@ -10,6 +10,7 @@ import * as vscode from "vscode";
 import {
   CLEAR_DIAGNOSTICS_COMMAND,
   createDiagnosticCodeActions,
+  RECSS_FIX_ALL_UNUSED_SELECTORS_KIND,
   REFRESH_ANALYSIS_COMMAND,
 } from "./code-actions.js";
 import { createDiagnosticRecords } from "./diagnostics.js";
@@ -164,7 +165,10 @@ export function activate(context: vscode.ExtensionContext): void {
         },
       },
       {
-        providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
+        providedCodeActionKinds: [
+          vscode.CodeActionKind.QuickFix,
+          RECSS_FIX_ALL_UNUSED_SELECTORS_KIND,
+        ],
       },
     ),
     vscode.commands.registerCommand(REFRESH_ANALYSIS_COMMAND, () => {

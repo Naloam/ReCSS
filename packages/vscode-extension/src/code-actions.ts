@@ -10,6 +10,11 @@ export const REMOVE_UNUSED_CLASS_SELECTOR_TITLE =
   "ReCSS: Remove Unused Class Selector";
 export const REMOVE_ALL_UNUSED_SELECTORS_TITLE =
   "ReCSS: Remove All Simple Unused Selectors";
+export const FIX_ALL_UNUSED_SELECTORS_TITLE =
+  "ReCSS: Fix All Simple Unused Selectors in File";
+export const RECSS_FIX_ALL_UNUSED_SELECTORS_KIND = new vscode.CodeActionKind(
+  "source.fixAll.recss",
+);
 
 type UnusedClassDiagnosticData = {
   className: string;
@@ -343,6 +348,10 @@ function createRemoveUnusedClassRuleAction(
 function createRemoveAllUnusedSelectorsAction(
   document: vscode.TextDocument,
   diagnostics: vscode.Diagnostic[],
+  options?: {
+    kind?: vscode.CodeActionKind;
+    title?: string;
+  },
 ): vscode.CodeAction | undefined {
   const groupedRemovals = new Map<string, ResolvedDiagnosticRemoval[]>();
 
@@ -431,8 +440,8 @@ function createRemoveAllUnusedSelectorsAction(
   }
 
   const action = new vscode.CodeAction(
-    REMOVE_ALL_UNUSED_SELECTORS_TITLE,
-    vscode.CodeActionKind.QuickFix,
+    options?.title ?? REMOVE_ALL_UNUSED_SELECTORS_TITLE,
+    options?.kind ?? vscode.CodeActionKind.QuickFix,
   );
   const edit = new vscode.WorkspaceEdit();
 
@@ -444,6 +453,20 @@ function createRemoveAllUnusedSelectorsAction(
   action.diagnostics = sortedRemovals.flatMap((removal) => removal.diagnostics);
 
   return action;
+}
+
+function matchesRequestedCodeActionKind(
+  requestedKind: vscode.CodeActionKind | undefined,
+  actionKind: vscode.CodeActionKind,
+): boolean {
+  if (!requestedKind) {
+    return true;
+  }
+
+  return (
+    actionKind.value === requestedKind.value ||
+    actionKind.value.startsWith(`${requestedKind.value}.`)
+  );
 }
 
 export function createDiagnosticCodeActions(
@@ -460,16 +483,38 @@ export function createDiagnosticCodeActions(
     return [];
   }
 
+  const requestedKind = context.only;
+  const shouldIncludeQuickFixes = matchesRequestedCodeActionKind(
+    requestedKind,
+    vscode.CodeActionKind.QuickFix,
+  );
+  const shouldIncludeFixAllAction =
+    Boolean(requestedKind) &&
+    matchesRequestedCodeActionKind(
+      requestedKind,
+      RECSS_FIX_ALL_UNUSED_SELECTORS_KIND,
+    );
+
+  if (!shouldIncludeQuickFixes && !shouldIncludeFixAllAction) {
+    return [];
+  }
+
   const firstRemovableDiagnostic = recssDiagnostics.find((diagnostic) =>
     Boolean(resolveUnusedClassRemoval(document, diagnostic)),
   );
-  const removeAction = firstRemovableDiagnostic
-    ? createRemoveUnusedClassRuleAction(document, firstRemovableDiagnostic)
+  const removeAction =
+    shouldIncludeQuickFixes && firstRemovableDiagnostic
+      ? createRemoveUnusedClassRuleAction(document, firstRemovableDiagnostic)
+      : undefined;
+  const removeAllAction = shouldIncludeQuickFixes
+    ? createRemoveAllUnusedSelectorsAction(document, recssDiagnostics)
     : undefined;
-  const removeAllAction = createRemoveAllUnusedSelectorsAction(
-    document,
-    recssDiagnostics,
-  );
+  const fixAllAction = shouldIncludeFixAllAction
+    ? createRemoveAllUnusedSelectorsAction(document, recssDiagnostics, {
+        kind: RECSS_FIX_ALL_UNUSED_SELECTORS_KIND,
+        title: FIX_ALL_UNUSED_SELECTORS_TITLE,
+      })
+    : undefined;
   const refreshAction = new vscode.CodeAction(
     "ReCSS: Refresh Analysis",
     vscode.CodeActionKind.QuickFix,
@@ -491,13 +536,19 @@ export function createDiagnosticCodeActions(
   clearAction.diagnostics = recssDiagnostics;
 
   const actions: vscode.CodeAction[] = [];
-  if (removeAction) {
-    actions.push(removeAction);
+  if (shouldIncludeQuickFixes) {
+    if (removeAction) {
+      actions.push(removeAction);
+    }
+    if (removeAllAction) {
+      actions.push(removeAllAction);
+    }
+
+    actions.push(refreshAction, clearAction);
   }
-  if (removeAllAction) {
-    actions.push(removeAllAction);
+  if (fixAllAction) {
+    actions.push(fixAllAction);
   }
 
-  actions.push(refreshAction, clearAction);
   return actions;
 }

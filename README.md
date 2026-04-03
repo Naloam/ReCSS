@@ -23,7 +23,7 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 - Provide `recss init` to bootstrap config
 - Provide `recss migrate` for CSS Modules migration suggestions and apply flow
 - Provide `@recss/vite-plugin` for HMR-time warnings
-- Provide `@recss/vscode-extension` for inline unused-class diagnostics and initial source-editing quick fixes
+- Provide `@recss/vscode-extension` for inline unused-class diagnostics, quick fixes, and file-level fix-all support
 
 ### `recss migrate --apply` support scope
 
@@ -68,7 +68,7 @@ Phase 1 and Phase 2 are delivered. Phase 3 ecosystem work is now underway with m
 Deferred:
 
 - Deeper CSS Modules auto-rewrite coverage beyond the patterns above
-- Deeper VSCode source-editing quick fixes and broader code actions
+- Deeper VSCode source-editing quick fixes beyond current simple-selector removals
 
 ## Workspace
 

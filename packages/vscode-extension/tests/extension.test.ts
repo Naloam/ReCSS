@@ -51,6 +51,11 @@ const mockModules = vi.hoisted(() => {
         ) => unknown;
       }
     | undefined;
+  let codeActionProviderMetadata:
+    | {
+        providedCodeActionKinds?: readonly CodeActionKind[];
+      }
+    | undefined;
 
   const registeredCommands = new Map<string, (...args: unknown[]) => unknown>();
   const diagnosticCollection = {
@@ -242,6 +247,13 @@ const mockModules = vi.hoisted(() => {
           { diagnostics },
         ) ?? []) as CodeAction[];
       },
+      getProvidedCodeActionKinds(): string[] {
+        return (
+          codeActionProviderMetadata?.providedCodeActionKinds?.map(
+            (kind) => kind.value,
+          ) ?? []
+        );
+      },
       getOutputLines(): string[] {
         return outputChannel.appendLine.mock.calls.map(([value]) => value);
       },
@@ -253,6 +265,7 @@ const mockModules = vi.hoisted(() => {
         configurationListener = undefined;
         workspaceFoldersListener = undefined;
         codeActionProvider = undefined;
+        codeActionProviderMetadata = undefined;
         registeredCommands.clear();
         diagnosticCollection.clear.mockClear();
         diagnosticCollection.delete.mockClear();
@@ -325,8 +338,12 @@ const mockModules = vi.hoisted(() => {
                 },
               ) => unknown;
             },
+            metadata?: {
+              providedCodeActionKinds?: readonly CodeActionKind[];
+            },
           ) => {
             codeActionProvider = provider;
+            codeActionProviderMetadata = metadata;
             return {
               dispose: vi.fn(),
             };
@@ -495,6 +512,22 @@ describe("activate", () => {
     expect(mockModules.state.getOutputLines().at(-1)).toBe(
       "[recss] Cleared all diagnostics.",
     );
+  });
+
+  it("should register quick fix and source fix-all code action kinds", async () => {
+    mockModules.state.setWorkspaceFolders([
+      mockModules.state.workspaceFolder("app-a", "/workspace/app-a"),
+    ]);
+
+    const { activate } = await import("../src/extension.js");
+    activate({
+      subscriptions: [],
+    });
+
+    expect(mockModules.state.getProvidedCodeActionKinds()).toEqual([
+      "quickfix",
+      "source.fixAll.recss",
+    ]);
   });
 
   it("should provide quick fixes for recss diagnostics", async () => {

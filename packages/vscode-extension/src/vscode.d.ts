@@ -117,6 +117,7 @@ declare module "vscode" {
 
   export interface CodeActionContext {
     diagnostics: readonly Diagnostic[];
+    only?: CodeActionKind;
   }
 
   export interface CodeActionProvider {
