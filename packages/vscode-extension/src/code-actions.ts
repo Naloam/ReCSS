@@ -52,10 +52,18 @@ type UnusedClassRemoval = {
 };
 
 type ResolvedRemoval = {
-  diagnostic: vscode.Diagnostic;
+  diagnostics: vscode.Diagnostic[];
   endOffset: number;
   range: vscode.Range;
   startOffset: number;
+};
+
+type ResolvedDiagnosticRemoval = {
+  bounds: RuleBounds;
+  diagnostic: vscode.Diagnostic;
+  selectorText: string;
+  selectors: SelectorSlice[];
+  singleRemoval: UnusedClassRemoval;
 };
 
 type RuleBounds = {
@@ -216,10 +224,10 @@ export function resolveRuleRemovalRange(
     : undefined;
 }
 
-function resolveUnusedClassRemoval(
+function resolveDiagnosticRemoval(
   document: vscode.TextDocument,
   diagnostic: vscode.Diagnostic,
-): UnusedClassRemoval | undefined {
+): ResolvedDiagnosticRemoval | undefined {
   const data = diagnostic.data;
   if (!isUnusedClassDiagnosticData(data) || !isSimpleClassSelector(data)) {
     return undefined;
@@ -239,37 +247,53 @@ function resolveUnusedClassRemoval(
     return undefined;
   }
 
+  let singleRemoval: UnusedClassRemoval;
   if (selectors.length === 1) {
-    return {
+    singleRemoval = {
       title: REMOVE_UNUSED_CLASS_RULE_TITLE,
       range: new vscode.Range(
         document.positionAt(bounds.ruleStart),
         document.positionAt(bounds.removalEnd),
       ),
     };
-  }
+  } else {
+    const target = selectors[selectorIndex];
+    if (!target) {
+      return undefined;
+    }
 
-  const target = selectors[selectorIndex];
-  if (!target) {
-    return undefined;
-  }
+    const removalStart =
+      selectorIndex === 0
+        ? target.start
+        : (selectors[selectorIndex - 1]?.end ?? target.start);
+    const removalEnd =
+      selectorIndex === 0
+        ? (selectors[selectorIndex + 1]?.start ?? target.end)
+        : target.end;
 
-  const removalStart =
-    selectorIndex === 0
-      ? target.start
-      : (selectors[selectorIndex - 1]?.end ?? target.start);
-  const removalEnd =
-    selectorIndex === 0
-      ? (selectors[selectorIndex + 1]?.start ?? target.end)
-      : target.end;
+    singleRemoval = {
+      title: REMOVE_UNUSED_CLASS_SELECTOR_TITLE,
+      range: new vscode.Range(
+        document.positionAt(bounds.ruleStart + removalStart),
+        document.positionAt(bounds.ruleStart + removalEnd),
+      ),
+    };
+  }
 
   return {
-    title: REMOVE_UNUSED_CLASS_SELECTOR_TITLE,
-    range: new vscode.Range(
-      document.positionAt(bounds.ruleStart + removalStart),
-      document.positionAt(bounds.ruleStart + removalEnd),
-    ),
+    bounds,
+    diagnostic,
+    selectorText: data.selector.trim(),
+    selectors,
+    singleRemoval,
   };
+}
+
+function resolveUnusedClassRemoval(
+  document: vscode.TextDocument,
+  diagnostic: vscode.Diagnostic,
+): UnusedClassRemoval | undefined {
+  return resolveDiagnosticRemoval(document, diagnostic)?.singleRemoval;
 }
 
 function createRemoveUnusedClassRuleAction(
@@ -298,33 +322,77 @@ function createRemoveAllUnusedSelectorsAction(
   document: vscode.TextDocument,
   diagnostics: vscode.Diagnostic[],
 ): vscode.CodeAction | undefined {
-  const removals: ResolvedRemoval[] = [];
+  const groupedRemovals = new Map<string, ResolvedDiagnosticRemoval[]>();
 
   for (const diagnostic of diagnostics) {
-    const removal = resolveUnusedClassRemoval(document, diagnostic);
+    const removal = resolveDiagnosticRemoval(document, diagnostic);
     if (!removal) {
       continue;
     }
 
-    const startOffset = document.offsetAt(removal.range.start);
-    const endOffset = document.offsetAt(removal.range.end);
-    const duplicate = removals.some(
-      (item) =>
-        item.startOffset === startOffset && item.endOffset === endOffset,
-    );
-    if (duplicate) {
+    const ruleKey = `${removal.bounds.ruleStart}:${removal.bounds.removalEnd}`;
+    const existing = groupedRemovals.get(ruleKey);
+    if (existing) {
+      existing.push(removal);
+    } else {
+      groupedRemovals.set(ruleKey, [removal]);
+    }
+  }
+
+  const removalsByRange = new Map<string, ResolvedRemoval>();
+  for (const removals of groupedRemovals.values()) {
+    const first = removals[0];
+    if (!first) {
       continue;
     }
 
-    removals.push({
-      diagnostic,
-      endOffset,
-      range: removal.range,
-      startOffset,
-    });
+    const matchedSelectors = new Set(
+      removals.map((removal) => removal.selectorText),
+    );
+    const shouldRemoveWholeRule = first.selectors.every((selector) =>
+      matchedSelectors.has(selector.text),
+    );
+
+    if (shouldRemoveWholeRule) {
+      const startOffset = first.bounds.ruleStart;
+      const endOffset = first.bounds.removalEnd;
+      removalsByRange.set(`${startOffset}:${endOffset}`, {
+        diagnostics: removals.map((removal) => removal.diagnostic),
+        endOffset,
+        range: new vscode.Range(
+          document.positionAt(startOffset),
+          document.positionAt(endOffset),
+        ),
+        startOffset,
+      });
+      continue;
+    }
+
+    for (const removal of removals) {
+      const startOffset = document.offsetAt(removal.singleRemoval.range.start);
+      const endOffset = document.offsetAt(removal.singleRemoval.range.end);
+      const rangeKey = `${startOffset}:${endOffset}`;
+      const existing = removalsByRange.get(rangeKey);
+      if (existing) {
+        existing.diagnostics.push(removal.diagnostic);
+        continue;
+      }
+
+      removalsByRange.set(rangeKey, {
+        diagnostics: [removal.diagnostic],
+        endOffset,
+        range: removal.singleRemoval.range,
+        startOffset,
+      });
+    }
   }
 
-  if (removals.length < 2) {
+  const removals = [...removalsByRange.values()];
+  const removalCount = removals.reduce(
+    (count, removal) => count + removal.diagnostics.length,
+    0,
+  );
+  if (removals.length === 0 || removalCount < 2) {
     return undefined;
   }
 
@@ -351,7 +419,7 @@ function createRemoveAllUnusedSelectorsAction(
   }
 
   action.edit = edit;
-  action.diagnostics = sortedRemovals.map((removal) => removal.diagnostic);
+  action.diagnostics = sortedRemovals.flatMap((removal) => removal.diagnostics);
 
   return action;
 }

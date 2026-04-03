@@ -399,9 +399,83 @@ describe("createDiagnosticCodeActions", () => {
     ]);
   });
 
-  it("should skip the bulk remove action when selector removals overlap", () => {
+  it("should remove the whole rule when all selector list entries are unused", () => {
     const actions = createDiagnosticCodeActions(
       createMockDocument(".card, .card-title {\n  color: red;\n}\n") as never,
+      {
+        diagnostics: [
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card",
+              selector: ".card",
+            },
+            message: 'Unused CSS class ".card" is not referenced.',
+            range: {
+              end: {
+                character: 5,
+                line: 0,
+              },
+              start: {
+                character: 0,
+                line: 0,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+          {
+            code: RECSS_DIAGNOSTIC_CODE,
+            data: {
+              className: "card-title",
+              selector: ".card-title",
+            },
+            message: 'Unused CSS class ".card-title" is not referenced.',
+            range: {
+              end: {
+                character: 18,
+                line: 0,
+              },
+              start: {
+                character: 7,
+                line: 0,
+              },
+            },
+            severity: 1,
+            source: "recss",
+          },
+        ],
+      } as never,
+    );
+
+    expect(actions.map((action) => action.title)).toEqual([
+      REMOVE_UNUSED_CLASS_SELECTOR_TITLE,
+      REMOVE_ALL_UNUSED_SELECTORS_TITLE,
+      "ReCSS: Refresh Analysis",
+      "ReCSS: Clear Diagnostics",
+    ]);
+    expect(actions[1]?.edit?.entries).toEqual([
+      {
+        range: {
+          end: {
+            character: 0,
+            line: 3,
+          },
+          start: {
+            character: 0,
+            line: 0,
+          },
+        },
+        uri: "/workspace/app-a/src/styles/card.scss",
+      },
+    ]);
+  });
+
+  it("should skip the bulk remove action when overlapping selector removals are partial", () => {
+    const actions = createDiagnosticCodeActions(
+      createMockDocument(
+        ".card, .card-title, .card-footer {\n  color: red;\n}\n",
+      ) as never,
       {
         diagnostics: [
           {
