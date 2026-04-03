@@ -558,16 +558,15 @@ export function parseVueCode(
   try {
     const sfc = parse(sourceCode, { filename: filePath });
 
-    const scriptSetupContent = sfc.descriptor.scriptSetup?.content ?? "";
-    if (/\buseCssModule\s*\(/.test(scriptSetupContent)) {
-      return result;
-    }
-
-    const classHelpers = new Set<string>(KNOWN_CLASS_HELPERS);
     const scriptContents = [
       sfc.descriptor.script?.content,
       sfc.descriptor.scriptSetup?.content,
     ].filter((value): value is string => typeof value === "string");
+    if (scriptContents.some((content) => /\buseCssModule\s*\(/.test(content))) {
+      return result;
+    }
+
+    const classHelpers = new Set<string>(KNOWN_CLASS_HELPERS);
     for (const scriptContent of scriptContents) {
       for (const helper of collectClassHelpersFromScript(scriptContent)) {
         classHelpers.add(helper);

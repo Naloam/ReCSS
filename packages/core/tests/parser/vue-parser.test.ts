@@ -103,4 +103,24 @@ describe("parseVueCode", () => {
     expect(result.used.size).toBe(0);
     expect(result.uncertain.size).toBe(0);
   });
+
+  it("should skip file when useCssModule is detected in script", () => {
+    const result = parseVueCode(
+      "/virtual/App.vue",
+      [
+        '<template><div class="should-not-collect"></div></template>',
+        '<script lang="ts">',
+        "export default {",
+        "  setup() {",
+        "    const styles = useCssModule();",
+        "    return { styles };",
+        "  },",
+        "};",
+        "</script>",
+      ].join("\n"),
+    );
+
+    expect(result.used.size).toBe(0);
+    expect(result.uncertain.size).toBe(0);
+  });
 });
