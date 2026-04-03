@@ -1014,6 +1014,84 @@ describe("migrate helpers", () => {
     }
   });
 
+  it("should normalize optional filter-based array className expressions", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-optional-filter-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import "./card.scss";',
+          "export const Card = ({ active }: { active: boolean }) =>",
+          '  <div className={["card", active && "active"].filter?.(Boolean)} />;',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'className={[styles.card, active && styles.active].filter?.(Boolean)?.join(" ")}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("should normalize optional concat-based array className expressions", async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "recss-core-migrate-optional-concat-"),
+    );
+
+    try {
+      await mkdir(resolve(root, "src/components"), { recursive: true });
+      await writeFile(
+        resolve(root, "src/components/card.scss"),
+        ".card { color: red; }\n.active { color: blue; }",
+        "utf8",
+      );
+      await writeFile(
+        resolve(root, "src/components/Card.tsx"),
+        [
+          'import "./card.scss";',
+          "export const Card = ({ active }: { active: boolean }) =>",
+          '  <div className={["card"].concat?.(active ? ["active"] : [])} />;',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const suggestions = await buildMigrationSuggestions(root);
+      await applyMigrationSuggestions(root, suggestions);
+
+      const rewritten = await readFile(
+        resolve(root, "src/components/Card.tsx"),
+        "utf8",
+      );
+      expect(rewritten).toContain('import styles from "./card.module.scss";');
+      expect(rewritten).toContain(
+        'className={[styles.card].concat?.(active ? [styles.active] : [])?.filter(Boolean)?.join(" ")}',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("should rewrite binary string concatenation className expressions", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "recss-core-migrate-binary-"));
 

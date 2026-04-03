@@ -1027,7 +1027,8 @@ function getReactClassValueKind(expression: ReactAstNode): ReactExpressionKind {
       const right = expression.right as ReactAstNode | undefined;
       return right ? getReactClassValueKind(right) : "other";
     }
-    case "CallExpression": {
+    case "CallExpression":
+    case "OptionalCallExpression": {
       const callee = expression.callee as ReactAstNode | undefined;
       if (!callee) {
         return "other";
@@ -1077,6 +1078,9 @@ function formatReactClassNameCode(
     return rewrittenCode;
   }
 
+  const isOptionalArrayCall =
+    expression.type === "OptionalCallExpression" && Boolean(expression.optional);
+
   if (
     expression.type === "CallExpression" ||
     expression.type === "OptionalCallExpression"
@@ -1091,9 +1095,15 @@ function formatReactClassNameCode(
         callee.property as ReactAstNode,
       );
       if (propertyName === "filter") {
-        return `${rewrittenCode}.join(" ")`;
+        return isOptionalArrayCall
+          ? `${rewrittenCode}?.join(" ")`
+          : `${rewrittenCode}.join(" ")`;
       }
     }
+
+    return isOptionalArrayCall
+      ? `${rewrittenCode}?.filter(Boolean)?.join(" ")`
+      : `${rewrittenCode}.filter(Boolean).join(" ")`;
   }
 
   return `${rewrittenCode}.filter(Boolean).join(" ")`;
