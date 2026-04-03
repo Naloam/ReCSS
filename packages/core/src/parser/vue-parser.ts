@@ -15,6 +15,13 @@ type BabelNode = {
 };
 
 const KNOWN_CLASS_HELPERS = new Set(["clsx", "cn", "classnames"]);
+const ARRAY_CLASS_PASSTHROUGH_METHODS = new Set([
+  "filter",
+  "flat",
+  "join",
+  "slice",
+]);
+const ARRAY_CLASS_COMBINE_METHODS = new Set(["concat"]);
 
 function createEmptyResult(): SourceScanResult {
   return {
@@ -94,7 +101,11 @@ function getRequireCallSource(node: BabelNode | undefined): string | undefined {
 }
 
 function getMemberPropertyName(node: BabelNode | undefined): string | undefined {
-  if (!node || node.type !== "MemberExpression") {
+  if (
+    !node ||
+    (node.type !== "MemberExpression" &&
+      node.type !== "OptionalMemberExpression")
+  ) {
     return undefined;
   }
 
@@ -445,6 +456,18 @@ function collectFromExpression(
         return;
       }
 
+      if (
+        collectFromArrayClassCall(
+          expression,
+          node,
+          used,
+          uncertain,
+          classHelpers,
+        )
+      ) {
+        return;
+      }
+
       uncertain.add(getNodeSource(expression, node));
       return;
     }
@@ -475,6 +498,51 @@ function collectFromExpression(
       }
     }
   }
+}
+
+function collectFromArrayClassCall(
+  expression: string,
+  node: BabelNode,
+  used: Set<string>,
+  uncertain: Set<string>,
+  classHelpers: Set<string>,
+): boolean {
+  const callee = node.callee as BabelNode | undefined;
+  if (
+    !callee ||
+    (callee.type !== "MemberExpression" &&
+      callee.type !== "OptionalMemberExpression")
+  ) {
+    return false;
+  }
+
+  const methodName = getMemberPropertyName(callee);
+  const objectNode = callee.object as BabelNode | undefined;
+  if (!methodName || !objectNode) {
+    return false;
+  }
+
+  if (ARRAY_CLASS_PASSTHROUGH_METHODS.has(methodName)) {
+    collectFromExpression(expression, objectNode, used, uncertain, classHelpers);
+    return true;
+  }
+
+  if (!ARRAY_CLASS_COMBINE_METHODS.has(methodName)) {
+    return false;
+  }
+
+  collectFromExpression(expression, objectNode, used, uncertain, classHelpers);
+
+  const args = Array.isArray(node.arguments)
+    ? (node.arguments as Array<BabelNode | null>)
+    : [];
+  for (const arg of args) {
+    if (arg && arg.type !== "SpreadElement") {
+      collectFromExpression(expression, arg, used, uncertain, classHelpers);
+    }
+  }
+
+  return true;
 }
 
 function collectTemplateClasses(

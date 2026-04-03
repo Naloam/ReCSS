@@ -80,6 +80,21 @@ describe("parseVueCode", () => {
     expect(result.used.has("is-ready")).toBe(true);
   });
 
+  it("should extract class names from vue array-based class call chains", () => {
+    const result = parseVueCode(
+      "/virtual/App.vue",
+      [
+        "<template>",
+        `  <div :class="['card'].concat(isReady ? ['is-ready'] : []).filter?.(Boolean)?.join(' ')"></div>`,
+        "</template>",
+      ].join("\n"),
+    );
+
+    expect(result.used.has("card")).toBe(true);
+    expect(result.used.has("is-ready")).toBe(true);
+    expect(result.uncertain.size).toBe(0);
+  });
+
   it("should put pure variable class binding into uncertain set", () => {
     const result = parseVueCode(
       "/virtual/App.vue",
